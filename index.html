@@ -3,70 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock App - Mercado Limpio</title>
+    <title>Stock IA - Mercado Limpio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <style> body, html { height: 100%; overflow: hidden; } </style>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js'></script>
+    
+    <style>
+        body, html { height: 100%; overflow: hidden; }
+        /* Animación para el escaneo */
+        .scan-line {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 10px #3b82f6, 0 0 20px #3b82f6;
+            animation: scan 2s linear infinite;
+            display: none;
+        }
+        @keyframes scan {
+            0% { top: 0; } 100% { top: 100%; }
+        }
+        .scanning .scan-line { display: block; }
+    </style>
 </head>
-<body x-data="app()" x-init="cargarCatalogos()" class="bg-gray-100 flex flex-col h-screen">
+<body x-data="app()" x-init="initApp()" @paste.window="handlePaste($event)" class="bg-gray-900 flex flex-col h-screen font-sans">
 
-    <header class="bg-blue-900 text-white p-3 flex justify-between items-center shadow-lg z-10 gap-4">
-        <div class="flex items-center gap-2 overflow-hidden">
-            <h1 class="font-bold text-lg whitespace-nowrap hidden md:block">📦 Stock</h1>
+    <header class="bg-gray-800 text-white p-3 flex justify-between items-center shadow-lg z-20 border-b border-gray-700">
+        <div class="flex items-center gap-4">
+            <h1 class="font-bold text-xl hidden md:flex items-center gap-2">
+                <span class="text-blue-400 text-2xl">🤖</span> Stock IA
+            </h1>
             
-            <select x-model="catalogoActual" @change="cambiarCatalogo()" class="text-black text-sm rounded px-2 py-1 max-w-[200px] md:max-w-xs">
-                <option value="">📂 Seleccionar Proveedor...</option>
-                <template x-for="cat in listaCatalogos" :key="cat.id">
-                    <option :value="cat.url" x-text="cat.nombre"></option>
-                </template>
-            </select>
-            
-            <span x-show="cargando" class="text-xs animate-pulse text-yellow-300">Buscando PDFs...</span>
+            <div class="relative">
+                <select x-model="catalogoActual" class="bg-gray-700 text-white text-sm rounded-lg px-3 py-2 pr-8 appearance-none outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600">
+                    <option value="">📂 Seleccionar Catálogo...</option>
+                    <template x-for="cat in listaCatalogos" :key="cat.id">
+                        <option :value="cat.url" x-text="cat.nombre"></option>
+                    </template>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
+            </div>
+            <div x-show="estadoOCR.cargandoWorker" class="flex items-center gap-2 text-xs text-blue-300 bg-blue-900/50 px-2 py-1 rounded-full">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Iniciando motor de IA...
+            </div>
         </div>
         
-        <button @click="copiarResumen()" class="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm font-bold shadow whitespace-nowrap">
-            📋 Enviar Pedido
+        <button @click="copiarResumen()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition flex items-center gap-2">
+            <span>📝</span> Copiar Pedido
         </button>
     </header>
 
-    <div class="flex flex-1 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden relative">
         
-        <div class="w-full md:w-2/3 h-full bg-gray-800 relative border-r border-gray-600">
+        <div class="w-full md:w-3/5 lg:w-2/3 h-full bg-gray-700 relative">
             <template x-if="catalogoActual">
-                <iframe :src="catalogoActual" class="w-full h-full" allow="autoplay"></iframe>
+                <iframe :src="catalogoActual" class="w-full h-full" frameborder="0" allowfullscreen></iframe>
             </template>
-            
             <template x-if="!catalogoActual">
-                <div class="flex flex-col items-center justify-center h-full text-white opacity-50 text-center p-4">
-                    <p class="text-4xl mb-2">📄</p>
-                    <p>Selecciona un proveedor arriba<br>para ver su catálogo.</p>
+                <div class="flex flex-col items-center justify-center h-full text-gray-300 text-center p-8 space-y-6">
+                    <div class="bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-600 max-w-md">
+                        <p class="text-5xl mb-4">🚀</p>
+                        <h2 class="text-2xl font-bold text-white mb-2">¡Bienvenido al Futuro del Stock!</h2>
+                        <p class="text-gray-400 mb-6">Carga productos a la velocidad de la luz usando IA.</p>
+                        
+                        <div class="text-left bg-gray-900/50 p-4 rounded-lg text-sm space-y-3">
+                            <p class="font-bold text-blue-400">Cómo funciona la magia:</p>
+                            <ol class="list-decimal list-inside space-y-2">
+                                <li>Selecciona un catálogo arriba 👆</li>
+                                <li>Usa <kbd class="bg-gray-700 px-1 rounded">Win+Shift+S</kbd> y recorta un producto del PDF.</li>
+                                <li>Vuelve aquí y presiona <kbd class="bg-gray-700 px-1 rounded">Ctrl + V</kbd>.</li>
+                                <li>¡La IA extraerá el texto por ti! ✨</li>
+                            </ol>
+                        </div>
+                    </div>
                 </div>
             </template>
         </div>
 
-        <div class="w-full md:w-1/3 bg-white flex flex-col shadow-xl z-20 border-l border-gray-300">
-            <div class="p-3 bg-gray-50 border-b border-gray-200">
-                <div class="flex gap-2 mb-2">
-                    <input type="text" x-model="nuevoItem.nombre" @keydown.enter="$refs.qty.focus()" placeholder="Producto..." class="w-2/3 p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm">
-                    <input type="number" x-ref="qty" x-model="nuevoItem.cantidad" @keydown.enter="agregar()" placeholder="#" class="w-1/3 p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm">
+        <div class="w-full md:w-2/5 lg:w-1/3 bg-gray-50 flex flex-col shadow-2xl z-30 border-l border-gray-200">
+            
+            <div x-show="imagenPegadaSrc" class="bg-blue-50 p-4 border-b-4 border-blue-200 relative" x-transition>
+                <h3 class="font-bold text-blue-900 mb-2 flex justify-between items-center">
+                    <span>🧠 Análisis de IA</span>
+                    <button @click="limpiarIA()" class="text-xs text-blue-500 hover:underline">Limpiar</button>
+                </h3>
+                
+                <div class="flex gap-4">
+                    <div class="relative w-24 h-24 bg-gray-200 rounded-lg overflow-hidden shadow-sm border border-blue-100 shrink-0" :class="{ 'scanning': estadoOCR.procesando }">
+                        <img :src="imagenPegadaSrc" class="w-full h-full object-cover opacity-80">
+                        <div class="scan-line"></div>
+                        <div x-show="estadoOCR.procesando" class="absolute inset-0 flex items-center justify-center bg-black/20">
+                             <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-hidden flex flex-col">
+                        <div x-show="estadoOCR.procesando" class="text-sm text-blue-600 animate-pulse flex-1 flex items-center">
+                            Extrayendo texto inteligente...
+                        </div>
+                        <div x-show="!estadoOCR.procesando && textoExtraido.length > 0" class="flex-1 flex flex-col">
+                             <p class="text-xs text-gray-500 mb-1">Haz clic en el texto para usarlo:</p>
+                             <div class="flex-1 overflow-y-auto bg-white rounded border border-blue-100 p-1 text-sm shadow-inner max-h-[120px]">
+                                 <template x-for="(linea, idx) in textoExtraido" :key="idx">
+                                     <div class="p-1 hover:bg-blue-100 cursor-pointer rounded transition truncate" @click="usarTexto(linea)" x-text="linea"></div>
+                                 </template>
+                             </div>
+                        </div>
+                        <div x-show="!estadoOCR.procesando && textoExtraido.length === 0 && imagenPegadaSrc" class="text-xs text-red-500 flex-1 flex items-center">
+                            No se pudo encontrar texto claro. Intenta un recorte mejor.
+                        </div>
+                    </div>
                 </div>
-                <button @click="agregar()" class="w-full bg-blue-800 text-white py-2 rounded text-sm font-bold hover:bg-blue-700">AGREGAR</button>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-2 space-y-2 bg-white">
+            <div class="p-4 bg-white shadow-sm z-10 relative">
+                <h3 class="font-bold text-gray-800 mb-3">Nuevo Producto</h3>
+                <div class="space-y-3">
+                    <div>
+                        <input type="text" x-model="nuevoItem.nombre" x-ref="nombreInput" @keydown.enter="$refs.qtyInput.focus()" placeholder="Nombre o Código del producto..." class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-medium text-gray-700 placeholder-gray-400">
+                        <p class="text-xs text-gray-400 mt-1 ml-1">💡 Pega un recorte (Ctrl+V) para autocompletar.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <input type="number" x-ref="qtyInput" x-model="nuevoItem.cantidad" @keydown.enter="agregar()" placeholder="Cantidad" class="w-1/3 p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-bold text-center text-blue-900 placeholder-gray-400">
+                        <button @click="agregar()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-base font-bold shadow-md active:scale-95 transition flex justify-center items-center gap-2">
+                            <span>🚀</span> Cargar Producto
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 bg-gray-100 space-y-2 relative">
                 <template x-for="(item, index) in items" :key="index">
-                    <div class="flex justify-between items-center bg-blue-50 p-2 rounded border border-blue-100 shadow-sm">
-                        <span class="font-medium text-gray-700 text-sm" x-text="item.nombre"></span>
+                    <div class="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-200 group hover:shadow-md transition">
+                        <div class="flex flex-col">
+                            <span class="font-bold text-gray-800 leading-tight" x-text="item.nombre"></span>
+                            <span class="text-xs text-gray-500" x-text="'Agregado a las ' + item.hora"></span>
+                        </div>
                         <div class="flex items-center gap-3">
-                            <span class="font-bold text-blue-900" x-text="item.cantidad"></span>
-                            <button @click="eliminar(index)" class="text-red-400 hover:text-red-600 font-bold px-2">×</button>
+                            <span class="bg-blue-100 text-blue-800 font-bold px-3 py-1 rounded-full text-lg" x-text="item.cantidad"></span>
+                            <button @click="eliminar(index)" class="text-gray-300 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition group-hover:text-gray-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.757a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            </button>
                         </div>
                     </div>
                 </template>
+                
+                <div x-show="items.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-6 text-center pointer-events-none">
+                    <p class="text-4xl mb-2 opacity-50">📦</p>
+                    <p class="font-medium">Tu lista de pedido está vacía.</p>
+                    <p class="text-sm mt-1">¡Empieza a recortar y pegar productos!</p>
+                </div>
             </div>
-            
-            <div class="p-2 bg-gray-100 text-right text-xs text-gray-500 border-t">
-                <span x-text="items.length"></span> productos en lista
+
+            <div class="p-3 bg-white border-t border-gray-200 text-sm font-medium text-gray-600 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
+                <span>Total Artículos: <span class="font-bold text-gray-900" x-text="items.length"></span></span>
+                <span>Total Unidades: <span class="font-bold text-blue-600 text-base" x-text="items.reduce((sum, i) => sum + parseInt(i.cantidad || 0), 0)"></span></span>
             </div>
         </div>
     </div>
@@ -74,52 +168,164 @@
     <script>
         function app() {
             return {
-                // ⚠️ PEGA AQUÍ TU URL DE APPS SCRIPT (la que termina en /exec)
-                apiUrl: 'https://script.google.com/macros/s/AKfycbySwsXfzeNUHi3VWqGWcJtMmpzLjkSRlBEs7a8_FoaGKqgifoBJRFqAhIV_oTTHAJf40A/exec', 
+                // --- Configuración ---
+                // ⚠️ PEGA TU URL DEL SCRIPT DE GOOGLE DRIVE AQUÍ 👇
+                apiUrl: 'https://script.google.com/macros/s/AKfycbySwsXfzeNUHi3VWqGWcJtMmpzLjkSRlBEs7a8_FoaGKqgifoBJRFqAhIV_oTTHAJf40A/exec',
                 
+                // --- Estado de Datos ---
                 listaCatalogos: [],
                 catalogoActual: '',
-                cargando: false,
+                items: JSON.parse(localStorage.getItem('stock_pedido_ia')) || [],
                 nuevoItem: { nombre: '', cantidad: '' },
-                items: JSON.parse(localStorage.getItem('stock_pedido')) || [],
 
+                // --- Estado de IA y UI ---
+                tesseractWorker: null,
+                imagenPegadaSrc: null,
+                textoExtraido: [],
+                estadoOCR: { cargandoWorker: false, procesando: false },
+
+                // --- Inicialización ---
+                async initApp() {
+                    this.cargarCatalogos();
+                    this.iniciarTesseract();
+                },
+
+                // 1. Carga de Catálogos (Backend Drive)
                 async cargarCatalogos() {
-                    if(this.apiUrl === 'TU_URL_DEL_SCRIPT_AQUI') return; // Prevención si no has pegado la url
-                    
-                    this.cargando = true;
                     try {
-                        const response = await fetch(this.apiUrl);
-                        const data = await response.json();
-                        // Ordenar alfabéticamente
-                        this.listaCatalogos = data.sort((a,b) => a.nombre.localeCompare(b.nombre));
+                        const res = await fetch(this.apiUrl);
+                        const data = await res.json();
+                        this.listaCatalogos = Array.isArray(data) ? data.sort((a,b) => a.nombre.localeCompare(b.nombre)) : [];
+                    } catch (e) { console.error("Error API Drive:", e); }
+                },
+
+                // 2. Inicialización del Motor de IA (Tesseract)
+                async iniciarTesseract() {
+                    this.estadoOCR.cargandoWorker = true;
+                    try {
+                        this.tesseractWorker = await Tesseract.createWorker('spa', 1, {
+                            logger: m => console.log('[OCR]', m.status, Math.round(m.progress * 100) + '%')
+                        });
+                        console.log("✅ Motor IA Tesseract listo.");
                     } catch (e) {
-                        alert("Error cargando catálogos: " + e);
+                        console.error("❌ Error iniciando Tesseract:", e);
+                        alert("Error al cargar el motor de IA. La función de auto-lectura no estará disponible.");
                     }
-                    this.cargando = false;
+                    this.estadoOCR.cargandoWorker = false;
                 },
 
-                cambiarCatalogo() {
-                    // Limpiar lista si se cambia de proveedor (opcional)
-                    // if(confirm('¿Limpiar lista actual?')) this.items = [];
+                // --- Mágica: Manejo de Pegado (Ctrl+V) ---
+                handlePaste(e) {
+                    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                    for (const item of items) {
+                        if (item.type.indexOf('image') === 0) {
+                            e.preventDefault(); // Evita que se pegue la imagen en un input si estuviera seleccionado
+                            const blob = item.getAsFile();
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                this.imagenPegadaSrc = event.target.result;
+                                this.procesarImagenOCR(event.target.result); // Inicia el análisis
+                            };
+                            reader.readAsDataURL(blob);
+                            return; // Solo procesamos la primera imagen encontrada
+                        }
+                    }
                 },
 
+                // 3. Proceso de OCR (Reconocimiento de Texto)
+                async procesarImagenOCR(imagenSrc) {
+                    if (!this.tesseractWorker) { alert("El motor de IA aún no está listo."); return; }
+                    
+                    this.estadoOCR.procesando = true;
+                    this.textoExtraido = []; // Limpiar resultados anteriores
+                    
+                    try {
+                        // La magia sucede aquí:
+                        const { data: { text, lines } } = await this.tesseractWorker.recognize(imagenSrc);
+                        
+                        // Procesamos las líneas para limpiar basura y dejar solo texto útil
+                        this.textoExtraido = lines
+                            .map(line => line.text.trim())
+                            .filter(text => text.length > 2) // Filtramos líneas muy cortas/ruido
+                            // Eliminamos caracteres comunes de OCR erróneo al inicio/final
+                            .map(text => text.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ''));
+
+                        if (this.textoExtraido.length > 0) {
+                            // Intento inteligente: Si hay texto, pre-llenamos el nombre con la primera línea relevante
+                            // Esto hace que sea aún más rápido si el recorte es bueno.
+                             // this.nuevoItem.nombre = this.textoExtraido[0]; 
+                             // this.$refs.qtyInput.focus(); // Salto directo a cantidad
+                             // Comentado para que el usuario elija explícitamente haciendo click
+                        }
+
+                    } catch (error) {
+                        console.error("Error durante OCR:", error);
+                        this.textoExtraido = ["Error al analizar la imagen."];
+                    }
+                    this.estadoOCR.procesando = false;
+                },
+
+                // --- Helpers de UI ---
+                usarTexto(texto) {
+                    // Al hacer clic en una línea extraída, se pega en el input de nombre
+                    // Si ya hay algo, lo concatena para armar nombres largos
+                    this.nuevoItem.nombre = this.nuevoItem.nombre ? this.nuevoItem.nombre + ' ' + texto : texto;
+                    this.$refs.nombreInput.focus();
+                },
+                
+                limpiarIA() {
+                    this.imagenPegadaSrc = null;
+                    this.textoExtraido = [];
+                },
+
+                // --- Lógica de Stock (CRUD) ---
                 agregar() {
-                    if (!this.nuevoItem.nombre || !this.nuevoItem.cantidad) return;
-                    this.items.unshift({ ...this.nuevoItem });
-                    localStorage.setItem('stock_pedido', JSON.stringify(this.items));
+                    if (!this.nuevoItem.nombre.trim()) return this.$refs.nombreInput.focus();
+                    
+                    this.items.unshift({
+                        nombre: this.nuevoItem.nombre.trim(),
+                        cantidad: this.nuevoItem.cantidad || 1, // Default a 1 si está vacío
+                        hora: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                    });
+                    this.guardar();
+                    // Reset del formulario y estado de IA
                     this.nuevoItem = { nombre: '', cantidad: '' };
+                    this.limpiarIA(); 
+                    this.$refs.nombreInput.focus();
                 },
-
                 eliminar(index) {
                     this.items.splice(index, 1);
-                    localStorage.setItem('stock_pedido', JSON.stringify(this.items));
+                    this.guardar();
                 },
-
+                guardar() {
+                    localStorage.setItem('stock_pedido_ia', JSON.stringify(this.items));
+                },
                 copiarResumen() {
-                    let texto = "*PEDIDO STOCK*\n\n";
-                    this.items.forEach(i => texto += `• ${i.cantidad} x ${i.nombre}\n`);
-                    const link = `https://wa.me/?text=${encodeURIComponent(texto)}`;
-                    window.open(link, '_blank'); // Abre WhatsApp Web directo
+                    if (this.items.length === 0) return alert("¡La lista está vacía!");
+                    
+                    let texto = `🚀 *PEDIDO AUTOMÁTICO*\n📅 Fecha: ${new Date().toLocaleDateString()}\n-------------------------\n`;
+                    this.items.forEach(i => texto += `▪️ *${i.cantidad}* x ${i.nombre}\n`);
+                    texto += `-------------------------\nTotal: ${this.items.reduce((s, i) => s + parseInt(i.cantidad||0), 0)} unidades.`;
+                    
+                    // Usamos la API moderna de clipboard si está disponible
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                         navigator.clipboard.writeText(texto).then(() => {
+                             // Feedback visual sutil en lugar de un alert molesto
+                             const btn = document.querySelector('header button');
+                             const originalText = btn.innerHTML;
+                             btn.innerHTML = '<span>✅</span> ¡Copiado!';
+                             btn.classList.replace('bg-green-600', 'bg-green-700');
+                             setTimeout(() => {
+                                 btn.innerHTML = originalText;
+                                 btn.classList.replace('bg-green-700', 'bg-green-600');
+                                 // Opcional: abrir WA
+                                 window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+                             }, 1500);
+                         });
+                    } else {
+                        // Fallback
+                        window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+                    }
                 }
             }
         }
