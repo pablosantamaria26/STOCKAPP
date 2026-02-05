@@ -6,8 +6,11 @@
     <title>Smart Stock S9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
 
     <style>
         /* Optimización Dark Mode S9 (Negros Puros) */
@@ -19,10 +22,6 @@
         
         /* Efecto al tocar un producto */
         .textLayer span:active { background-color: rgba(0, 255, 0, 0.4) !important; border-radius: 4px; }
-        
-        /* Loader animado */
-        .loader { border: 4px solid rgba(255,255,255,0.1); border-left-color: #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 
@@ -110,7 +109,7 @@
     <script>
         function app() {
             return {
-                // ⚠️ PEGA AQUÍ TU NUEVA URL DEL SCRIPT (v2.0)
+                // ⚠️ TU SCRIPT ACTUALIZADO AQUI (Asegurate que sea el v2.0 que te pasé antes)
                 apiUrl: 'https://script.google.com/macros/s/AKfycbySwsXfzeNUHi3VWqGWcJtMmpzLjkSRlBEs7a8_FoaGKqgifoBJRFqAhIV_oTTHAJf40A/exec',
                 
                 listaCatalogos: [],
@@ -120,7 +119,7 @@
                 // PDF Engine
                 pdfDoc: null,
                 pageNum: 1,
-                scale: 1.5, // Zoom por defecto para el S9
+                scale: 1.5,
                 cargando: false,
                 
                 // Modal Form
@@ -128,26 +127,24 @@
                 form: { nombre: '', cantidad: 1, tipo: 'unidades' },
 
                 async init() {
-                    // Cargar lista al iniciar
                     try {
                         const res = await fetch(this.apiUrl);
                         this.listaCatalogos = await res.json();
-                    } catch(e) { alert("Error conectando a Drive: " + e); }
+                    } catch(e) { console.error("Error conectando a Drive: " + e); }
                 },
 
                 async cargarCatalogoSeleccionado() {
                     if (!this.catalogoId) return;
                     this.cargando = true;
-                    this.pdfDoc = null; // Limpiar anterior
+                    this.pdfDoc = null; 
 
                     try {
-                        // 1. Pedir el archivo crudo al Script (puede tardar unos segundos)
                         const res = await fetch(`${this.apiUrl}?id=${this.catalogoId}`);
                         const respuesta = await res.json();
                         
                         if (respuesta.error) throw respuesta.error;
 
-                        // 2. Decodificar Base64 a ArrayBuffer (Binario)
+                        // Decodificar Base64
                         const binaryString = atob(respuesta.data);
                         const len = binaryString.length;
                         const bytes = new Uint8Array(len);
@@ -155,13 +152,12 @@
                             bytes[i] = binaryString.charCodeAt(i);
                         }
 
-                        // 3. Inicializar PDF.js
                         const loadingTask = pdfjsLib.getDocument(bytes);
                         this.pdfDoc = await loadingTask.promise;
                         this.renderPage(1);
 
                     } catch (e) {
-                        alert("No se pudo cargar el catálogo. Puede ser muy pesado para el Script.");
+                        alert("Error cargando PDF: " + e);
                         console.error(e);
                     }
                     this.cargando = false;
@@ -174,37 +170,34 @@
                     const canvas = document.getElementById('the-canvas');
                     const ctx = canvas.getContext('2d');
                     
-                    // Ajustar viewport
                     const viewport = page.getViewport({ scale: this.scale });
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
 
-                    // Renderizar imagen
                     await page.render({ canvasContext: ctx, viewport: viewport }).promise;
 
-                    // Renderizar TEXTO INVISIBLE (La Magia)
+                    // --- RENDERIZADO DE CAPA DE TEXTO (Versión Compatible v2) ---
                     const textContent = await page.getTextContent();
                     const textLayer = document.getElementById('text-layer');
                     textLayer.style.height = viewport.height + 'px';
                     textLayer.style.width = viewport.width + 'px';
-                    textLayer.innerHTML = ''; // Limpiar
+                    textLayer.innerHTML = ''; 
 
+                    // En la versión 2.x, el parámetro es 'textContent', no 'textContentSource'
                     pdfjsLib.renderTextLayer({
-                        textContentSource: textContent,
+                        textContent: textContent,
                         container: textLayer,
                         viewport: viewport,
                         textDivs: []
                     });
                     
-                    // Añadir eventos a las palabras tras renderizar
                     setTimeout(() => {
                         const spans = textLayer.querySelectorAll('span');
                         spans.forEach(span => {
                             span.addEventListener('click', (e) => {
-                                // "Limpiar" texto: quitar $ y números raros
                                 let txt = e.target.innerText;
-                                if(txt.length < 3) return; // Ignorar ruido
-                                
+                                if(txt.length < 3) return;
+                                // Limpieza simple: quitar precios o códigos raros
                                 this.abrirForm(txt.replace(/[\$0-9,\.]{3,}/g, '').trim());
                             });
                         });
@@ -221,16 +214,16 @@
                     this.form.nombre = nombre;
                     this.form.cantidad = 1;
                     this.modalOpen = true;
-                    if(navigator.vibrate) navigator.vibrate(30); // Tactil
+                    if(navigator.vibrate) navigator.vibrate(30);
                 },
 
                 guardar() {
                     this.items.unshift({ ...this.form });
                     localStorage.setItem('stock_drive', JSON.stringify(this.items));
                     this.modalOpen = false;
-                    if(navigator.vibrate) navigator.vibrate([50, 30]); // Confirmación
+                    if(navigator.vibrate) navigator.vibrate([50, 30]);
                     
-                    // Mostrar notificación flotante rápida (opcional)
+                    // Animación visual botón carrito
                     const btn = document.querySelector('button[class*="bg-green"]');
                     btn.classList.add('animate-bounce');
                     setTimeout(() => btn.classList.remove('animate-bounce'), 1000);
