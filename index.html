@@ -3,236 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Stock S9</title>
+    <title>Stock Rápido</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-    </script>
-
     <style>
-        /* Optimización Dark Mode S9 (Negros Puros) */
-        body { background-color: #000000; color: #e0e0e0; overflow: hidden; font-family: sans-serif; }
-        
-        /* Capa de texto invisible para la IA */
-        .textLayer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; opacity: 0.1; line-height: 1.0; pointer-events: none; }
-        .textLayer span { color: transparent; position: absolute; white-space: pre; cursor: pointer; pointer-events: auto; }
-        
-        /* Efecto al tocar un producto */
-        .textLayer span:active { background-color: rgba(0, 255, 0, 0.4) !important; border-radius: 4px; }
+        /* Ajuste para que no se mueva el teclado al escribir */
+        body { position: fixed; width: 100%; height: 100%; background: #000; overflow: hidden; }
+        iframe { border: none; width: 100%; height: 100%; }
     </style>
 </head>
 
-<body x-data="app()" x-init="init()" class="h-screen flex flex-col relative">
+<body x-data="stockApp()" x-init="init()" class="flex flex-col text-gray-100">
 
-    <div class="absolute top-0 left-0 right-0 z-30 p-2 pointer-events-none">
-        <div class="pointer-events-auto bg-gray-900/95 backdrop-blur border border-gray-700 rounded-xl shadow-2xl p-2 flex gap-2 items-center justify-between">
+    <div class="flex-1 relative bg-gray-900 border-b-2 border-blue-600 transition-all duration-300" 
+         :class="modoPantallaCompleta ? 'h-0 flex-none hidden' : 'h-[45%]'">
+        
+        <template x-if="catalogoUrl">
+            <iframe :src="catalogoUrl" allow="autoplay"></iframe>
+        </template>
+        
+        <div x-show="!catalogoUrl" class="absolute inset-0 flex items-center justify-center text-gray-500">
+            <p>Selecciona un proveedor abajo 👇</p>
+        </div>
+
+        <button @click="modoPantallaCompleta = !modoPantallaCompleta" 
+                class="absolute bottom-2 right-2 bg-black/70 p-2 rounded-full text-white text-xs z-10 border border-gray-600">
+            ↕️ Ampliar Lista
+        </button>
+    </div>
+
+    <div class="flex flex-col bg-black transition-all duration-300"
+         :class="modoPantallaCompleta ? 'h-full' : 'h-[55%]'">
+        
+        <div class="p-2 bg-gray-900 flex gap-2 items-center shadow-lg z-20">
+            <select x-model="catalogoUrl" class="bg-gray-800 text-white text-sm rounded px-2 py-2 flex-1 border border-gray-700 outline-none">
+                <option value="">📂 Ver Catálogo...</option>
+                <template x-for="c in catalogos" :key="c.url">
+                    <option :value="c.url" x-text="c.nombre"></option>
+                </template>
+            </select>
             
-            <div class="relative flex-1">
-                <select x-model="catalogoId" @change="cargarCatalogoSeleccionado()" 
-                        class="w-full bg-gray-800 text-white text-sm rounded-lg py-2 pl-3 pr-8 appearance-none focus:ring-2 focus:ring-blue-500 outline-none border border-gray-600">
-                    <option value="">📂 Seleccionar Proveedor...</option>
-                    <template x-for="c in listaCatalogos" :key="c.id">
-                        <option :value="c.id" x-text="c.nombre"></option>
-                    </template>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">▼</div>
-            </div>
-
-            <button @click="verResumen()" class="bg-green-600 px-3 py-2 rounded-lg font-bold text-white shadow active:scale-95 flex items-center gap-1">
-                <span>🛒</span> <span x-text="items.length"></span>
+            <button @click="verResumen()" class="bg-green-600 px-3 py-2 rounded font-bold text-sm whitespace-nowrap">
+                Envíar (<span x-text="items.length"></span>)
             </button>
         </div>
-        
-        <div x-show="cargando" class="mt-2 mx-2 bg-gray-800 rounded-full h-1 overflow-hidden pointer-events-auto">
-            <div class="bg-blue-500 h-full animate-pulse w-full"></div>
-        </div>
-        <div x-show="cargando" class="text-center text-xs text-blue-400 font-bold mt-1 shadow-black drop-shadow-md">
-            🚀 Descargando Catálogo al dispositivo...
-        </div>
-    </div>
 
-    <div id="pdf-container" class="flex-1 overflow-auto bg-black relative touch-pan-x touch-pan-y flex justify-center pt-16 pb-24">
-        <div class="relative shadow-2xl border border-gray-800 bg-gray-900 min-h-[500px]" :class="{'opacity-50': cargando}">
-            <canvas id="the-canvas" class="block"></canvas>
-            <div id="text-layer" class="textLayer"></div>
+        <div class="px-2 pt-2 pb-1 bg-black">
+            <div class="relative">
+                <input type="text" x-model="busqueda" x-ref="inputBusqueda"
+                       placeholder="🔍 Escribe producto (ej: lavandina)..." 
+                       class="w-full bg-gray-800 text-white rounded-lg pl-3 pr-10 py-3 text-lg font-medium outline-none border border-gray-700 focus:border-blue-500">
+                
+                <button x-show="busqueda" @click="busqueda=''; $refs.inputBusqueda.focus()" class="absolute right-2 top-2 text-gray-400 p-1 text-xl">✕</button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-2 space-y-2 pb-20">
             
-            <div x-show="!pdfDoc && !cargando" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-4">
-                <div class="text-6xl">📡</div>
-                <p>Conectando con Drive...</p>
+            <div x-show="busqueda.length > 0" class="bg-blue-900/30 border border-blue-500/50 p-3 rounded-xl flex justify-between items-center animate-pulse">
+                <div>
+                    <span class="text-gray-400 text-xs uppercase">Agregar Nuevo:</span>
+                    <div class="font-bold text-xl text-white" x-text="busqueda"></div>
+                </div>
+                <button @click="agregar(busqueda)" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg active:scale-95">
+                    + CARGAR
+                </button>
+            </div>
+
+            <template x-for="(item, index) in items" :key="index">
+                <div class="bg-gray-800 p-3 rounded-xl flex justify-between items-center border border-gray-700 shadow-sm">
+                    <div class="flex flex-col flex-1">
+                        <span class="font-medium text-lg text-gray-200" x-text="item.nombre"></span>
+                        <div class="flex gap-2 mt-1">
+                            <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300" x-text="item.tipo"></span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 bg-black/50 rounded-lg p-1 ml-2">
+                        <button @click="cambiarCant(index, -1)" class="w-8 h-8 rounded bg-gray-700 text-red-400 font-bold text-xl flex items-center justify-center active:bg-gray-600">-</button>
+                        <span class="w-8 text-center font-bold text-xl text-white" x-text="item.cantidad"></span>
+                        <button @click="cambiarCant(index, 1)" class="w-8 h-8 rounded bg-gray-700 text-green-400 font-bold text-xl flex items-center justify-center active:bg-gray-600">+</button>
+                    </div>
+                </div>
+            </template>
+
+            <div x-show="items.length === 0 && !busqueda" class="text-center text-gray-600 mt-8">
+                <p class="text-4xl mb-2">📦</p>
+                <p>Lista vacía.</p>
+                <p class="text-sm">Mira el catálogo arriba y escribe abajo.</p>
             </div>
         </div>
     </div>
 
-    <div x-show="pdfDoc" class="fixed bottom-24 right-4 z-20 flex flex-col gap-3 pointer-events-auto">
-        <button @click="cambiarPag(-1)" class="w-12 h-12 bg-gray-800/90 rounded-full text-white border border-gray-600 shadow-xl text-xl flex items-center justify-center backdrop-blur active:scale-90">⬆</button>
-        <button @click="cambiarPag(1)" class="w-12 h-12 bg-gray-800/90 rounded-full text-white border border-gray-600 shadow-xl text-xl flex items-center justify-center backdrop-blur active:scale-90">⬇</button>
-    </div>
-
-    <div class="fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 bg-gray-900 border-t border-gray-700 rounded-t-3xl shadow-[0_-10px_60px_rgba(0,0,0,1)] pb-2"
-         :class="modalOpen ? 'translate-y-0' : 'translate-y-full'">
-        
-        <div class="bg-gray-800 rounded-t-3xl p-3 flex justify-between items-center border-b border-gray-700" @click="modalOpen = false">
-            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Producto Detectado</span>
-            <div class="w-10 h-1 bg-gray-600 rounded-full"></div>
-            <button class="text-gray-400 text-xl px-2">✕</button>
-        </div>
-
-        <div class="p-4 space-y-4">
-            <input type="text" x-model="form.nombre" class="w-full bg-transparent text-lg font-bold text-white border-b border-gray-600 focus:border-blue-500 outline-none py-1 placeholder-gray-600" placeholder="Nombre del producto...">
-
-            <div class="grid grid-cols-2 gap-3">
-                <button @click="form.tipo = 'unidades'" :class="form.tipo === 'unidades' ? 'bg-blue-700 text-white shadow-lg shadow-blue-900/50' : 'bg-gray-800 text-gray-400'" class="py-3 rounded-xl font-bold text-sm transition-all border border-gray-700">
+    <div x-show="modalOpen" class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-700 p-5 shadow-2xl">
+            <h3 class="text-xl font-bold text-center mb-4 text-white">¿Cómo lo vendes?</h3>
+            <div class="bg-gray-800 p-3 rounded mb-4 text-center text-blue-300 font-medium" x-text="tempNombre"></div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <button @click="confirmarAgregar('UNIDAD')" class="bg-blue-600 py-4 rounded-xl font-bold text-white shadow-lg active:scale-95">
                     📦 UNIDAD
                 </button>
-                <button @click="form.tipo = 'bulto'" :class="form.tipo === 'bulto' ? 'bg-purple-700 text-white shadow-lg shadow-purple-900/50' : 'bg-gray-800 text-gray-400'" class="py-3 rounded-xl font-bold text-sm transition-all border border-gray-700">
+                <button @click="confirmarAgregar('BULTO')" class="bg-purple-600 py-4 rounded-xl font-bold text-white shadow-lg active:scale-95">
                     🧱 BULTO
                 </button>
             </div>
-
-            <div class="flex gap-3">
-                <div class="flex items-center bg-gray-800 rounded-xl border border-gray-700 w-1/3">
-                    <button @click="form.cantidad > 1 ? form.cantidad-- : null" class="w-8 h-full text-gray-400 text-xl">-</button>
-                    <input type="number" x-model="form.cantidad" class="w-full bg-transparent text-center font-bold text-white text-xl outline-none py-3">
-                    <button @click="form.cantidad++" class="w-8 h-full text-gray-400 text-xl">+</button>
-                </div>
-                
-                <button @click="guardar()" class="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
-                    CONFIRMAR
-                </button>
-            </div>
+            <button @click="modalOpen = false" class="w-full py-3 text-gray-400 font-medium">Cancelar</button>
         </div>
     </div>
 
     <script>
-        function app() {
+        function stockApp() {
             return {
-                // ⚠️ TU SCRIPT ACTUALIZADO AQUI (Asegurate que sea el v2.0 que te pasé antes)
+                // PEGA TU URL DEL SCRIPT AQUI (La versión simple del Paso 1)
                 apiUrl: 'https://script.google.com/macros/s/AKfycbySwsXfzeNUHi3VWqGWcJtMmpzLjkSRlBEs7a8_FoaGKqgifoBJRFqAhIV_oTTHAJf40A/exec',
                 
-                listaCatalogos: [],
-                catalogoId: '',
-                items: JSON.parse(localStorage.getItem('stock_drive')) || [],
+                catalogos: [],
+                catalogoUrl: '',
+                items: JSON.parse(localStorage.getItem('stock_simple')) || [],
+                busqueda: '',
+                modoPantallaCompleta: false,
                 
-                // PDF Engine
-                pdfDoc: null,
-                pageNum: 1,
-                scale: 1.5,
-                cargando: false,
-                
-                // Modal Form
+                // Variables del Modal
                 modalOpen: false,
-                form: { nombre: '', cantidad: 1, tipo: 'unidades' },
+                tempNombre: '',
 
                 async init() {
                     try {
                         const res = await fetch(this.apiUrl);
-                        this.listaCatalogos = await res.json();
-                    } catch(e) { console.error("Error conectando a Drive: " + e); }
+                        this.catalogos = await res.json();
+                    } catch(e) { console.error(e); }
                 },
 
-                async cargarCatalogoSeleccionado() {
-                    if (!this.catalogoId) return;
-                    this.cargando = true;
-                    this.pdfDoc = null; 
-
-                    try {
-                        const res = await fetch(`${this.apiUrl}?id=${this.catalogoId}`);
-                        const respuesta = await res.json();
-                        
-                        if (respuesta.error) throw respuesta.error;
-
-                        // Decodificar Base64
-                        const binaryString = atob(respuesta.data);
-                        const len = binaryString.length;
-                        const bytes = new Uint8Array(len);
-                        for (let i = 0; i < len; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-
-                        const loadingTask = pdfjsLib.getDocument(bytes);
-                        this.pdfDoc = await loadingTask.promise;
-                        this.renderPage(1);
-
-                    } catch (e) {
-                        alert("Error cargando PDF: " + e);
-                        console.error(e);
-                    }
-                    this.cargando = false;
+                agregar(nombre) {
+                    this.tempNombre = nombre;
+                    this.modalOpen = true; // Preguntar si es bulto o unidad
                 },
 
-                async renderPage(num) {
-                    this.pageNum = num;
-                    const page = await this.pdfDoc.getPage(num);
+                confirmarAgregar(tipo) {
+                    // Buscar si ya existe para sumar
+                    let existe = this.items.find(i => i.nombre === this.tempNombre && i.tipo === tipo);
                     
-                    const canvas = document.getElementById('the-canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    const viewport = page.getViewport({ scale: this.scale });
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
-                    // --- RENDERIZADO DE CAPA DE TEXTO (Versión Compatible v2) ---
-                    const textContent = await page.getTextContent();
-                    const textLayer = document.getElementById('text-layer');
-                    textLayer.style.height = viewport.height + 'px';
-                    textLayer.style.width = viewport.width + 'px';
-                    textLayer.innerHTML = ''; 
-
-                    // En la versión 2.x, el parámetro es 'textContent', no 'textContentSource'
-                    pdfjsLib.renderTextLayer({
-                        textContent: textContent,
-                        container: textLayer,
-                        viewport: viewport,
-                        textDivs: []
-                    });
-                    
-                    setTimeout(() => {
-                        const spans = textLayer.querySelectorAll('span');
-                        spans.forEach(span => {
-                            span.addEventListener('click', (e) => {
-                                let txt = e.target.innerText;
-                                if(txt.length < 3) return;
-                                // Limpieza simple: quitar precios o códigos raros
-                                this.abrirForm(txt.replace(/[\$0-9,\.]{3,}/g, '').trim());
-                            });
+                    if (existe) {
+                        existe.cantidad++;
+                    } else {
+                        this.items.unshift({
+                            nombre: this.tempNombre,
+                            cantidad: 1,
+                            tipo: tipo
                         });
-                    }, 200);
+                    }
+                    
+                    this.guardar();
+                    this.modalOpen = false;
+                    this.busqueda = ''; // Limpiar buscador
+                    
+                    // Vibración de éxito
+                    if(navigator.vibrate) navigator.vibrate(50);
                 },
 
-                cambiarPag(dir) {
-                    if(!this.pdfDoc) return;
-                    const nueva = this.pageNum + dir;
-                    if(nueva >= 1 && nueva <= this.pdfDoc.numPages) this.renderPage(nueva);
-                },
-
-                abrirForm(nombre) {
-                    this.form.nombre = nombre;
-                    this.form.cantidad = 1;
-                    this.modalOpen = true;
-                    if(navigator.vibrate) navigator.vibrate(30);
+                cambiarCant(index, delta) {
+                    this.items[index].cantidad += delta;
+                    if (this.items[index].cantidad <= 0) {
+                        if(confirm('¿Borrar este artículo?')) {
+                            this.items.splice(index, 1);
+                        } else {
+                            this.items[index].cantidad = 1;
+                        }
+                    }
+                    this.guardar();
                 },
 
                 guardar() {
-                    this.items.unshift({ ...this.form });
-                    localStorage.setItem('stock_drive', JSON.stringify(this.items));
-                    this.modalOpen = false;
-                    if(navigator.vibrate) navigator.vibrate([50, 30]);
-                    
-                    // Animación visual botón carrito
-                    const btn = document.querySelector('button[class*="bg-green"]');
-                    btn.classList.add('animate-bounce');
-                    setTimeout(() => btn.classList.remove('animate-bounce'), 1000);
+                    localStorage.setItem('stock_simple', JSON.stringify(this.items));
                 },
 
                 verResumen() {
-                    let txt = "*PEDIDO STOCK*\n\n";
-                    this.items.forEach(i => txt += `${i.tipo == 'bulto'?'🧱':'📦'} ${i.cantidad} x ${i.nombre}\n`);
-                    window.location.href = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+                    let texto = "*PEDIDO STOCK*\n\n";
+                    this.items.forEach(i => {
+                        let icono = i.tipo === 'BULTO' ? '🧱' : '📦';
+                        texto += `${icono} ${i.cantidad} x ${i.nombre}\n`;
+                    });
+                    window.location.href = `https://wa.me/?text=${encodeURIComponent(texto)}`;
                 }
             }
         }
