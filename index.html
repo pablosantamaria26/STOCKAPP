@@ -3,231 +3,279 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000">
-    <title>Stock Tactical S9</title>
+    <title>Smart Catalog S9</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <script>
+        // Configuración del Worker de PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
 
     <style>
-        /* Optimización S9: Scroll suave y negros puros para pantalla AMOLED */
-        body { background-color: #000000; color: #e5e5e5; overscroll-behavior: none; }
+        body { background-color: #121212; color: #e0e0e0; overflow: hidden; }
         
-        /* Ocultar scrollbar pero permitir scroll */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Contenedor del PDF */
+        #pdf-container {
+            overflow: auto;
+            position: relative;
+            height: 100vh;
+            background: #1a1a1a;
+            touch-action: pan-x pan-y; /* Permite zoom y scroll nativo */
+        }
 
-        /* Animación del panel de lista (Bottom Sheet) */
-        .sheet-transition { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .sheet-open { transform: translateY(0); }
-        .sheet-closed { transform: translateY(100%); }
+        /* La magia: Capa de texto invisible pero cliqueable */
+        .textLayer {
+            position: absolute;
+            left: 0; top: 0; right: 0; bottom: 0;
+            overflow: hidden;
+            opacity: 0.2; /* Truco: Ponlo en 0 para invisible, 0.2 para ver las zonas detectadas (debug) */
+            line-height: 1.0;
+            pointer-events: none; /* Dejar pasar toques al canvas si es necesario */
+        }
 
-        /* Efecto de onda al hablar */
-        .voice-active { box-shadow: 0 0 15px #ef4444; animation: pulse-red 1.5s infinite; }
-        @keyframes pulse-red { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        /* Cada palabra detectada se convierte en un botón */
+        .textLayer span {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: pointer;
+            transform-origin: 0% 0%;
+            pointer-events: auto; /* Reactivar toques en el texto */
+            border-radius: 2px;
+        }
+
+        /* Feedback visual al tocar un producto */
+        .textLayer span:active {
+            background-color: rgba(59, 130, 246, 0.5) !important; /* Azul */
+        }
+        
+        /* Estilo S9 Dark Mode */
+        .bottom-sheet {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
     </style>
 </head>
 
-<body x-data="tacticalApp()" x-init="init()" class="h-[100dvh] flex flex-col relative overflow-hidden">
+<body x-data="smartCatalog()" class="h-screen w-screen relative">
 
-    <div class="flex-1 relative z-0 bg-black">
-        <template x-if="catalogoUrl">
-            <iframe :src="`https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(catalogoUrl)}`" 
-                    class="w-full h-full border-none" 
-                    style="background-color: #1a1a1a;">
-            </iframe>
-        </template>
-        
-        <div x-show="!catalogoUrl" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center opacity-60">
-            <div class="mb-4 text-6xl animate-pulse">📡</div>
-            <h2 class="text-xl font-bold uppercase tracking-widest text-blue-500">Sistema Listo</h2>
-            <p class="text-sm mt-2 text-gray-400">Selecciona proveedor en el menú superior</p>
-        </div>
-    </div>
+    <div class="absolute top-0 left-0 right-0 z-30 p-2 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+        <div class="pointer-events-auto flex justify-between items-center bg-gray-900/90 backdrop-blur rounded-full px-4 py-2 border border-gray-700 shadow-xl">
+            <label class="flex items-center gap-2 text-sm font-bold text-blue-400 cursor-pointer">
+                📂 Abrir PDF
+                <input type="file" accept="application/pdf" class="hidden" @change="cargarPDF($event)">
+            </label>
+            
+            <div class="text-xs text-gray-400 font-mono">
+                Pág: <span x-text="pageNum"></span>/<span x-text="totalParams"></span>
+            </div>
 
-    <div class="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/90 to-transparent p-3 backdrop-blur-[2px]">
-        <select x-model="catalogoUrl" class="w-full bg-gray-900/80 text-white border border-gray-700 rounded-full px-4 py-2 text-sm font-medium shadow-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
-            <option value="">📂 SELECCIONAR PROVEEDOR</option>
-            <template x-for="cat in catalogos" :key="cat.id">
-                <option :value="cat.url" x-text="cat.nombre"></option>
-            </template>
-        </select>
-    </div>
-
-    <div class="absolute bottom-0 left-0 right-0 z-40 p-3 pb-4 bg-gray-900 border-t border-gray-800 shadow-2xl flex gap-2 items-center">
-        
-        <button @click="toggleLista()" class="p-3 rounded-full bg-gray-800 text-white relative active:scale-95 transition">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-            <span x-show="items.length > 0" x-text="items.length" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-sm"></span>
-        </button>
-
-        <form @submit.prevent="agregarManual" class="flex-1 flex gap-2">
-            <input x-model="inputRaw" x-ref="mainInput" type="text" placeholder="Ej: Lavandina 10" 
-                   class="w-full bg-gray-800 text-white rounded-xl px-4 py-3 text-sm focus:bg-gray-700 outline-none border border-gray-700 focus:border-blue-500 transition-colors placeholder-gray-500"
-                   inputmode="text" autocomplete="off">
-        </form>
-
-        <button @click="toggleVoz()" 
-                :class="escuchando ? 'bg-red-600 text-white voice-active' : 'bg-blue-600 text-white'"
-                class="p-3 rounded-full shadow-lg active:scale-90 transition-all duration-200">
-            <svg x-show="!escuchando" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-            <svg x-show="escuchando" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
-        </button>
-    </div>
-
-    <div class="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm transition-opacity" 
-         x-show="listaAbierta" @click="toggleLista()" x-transition.opacity></div>
-
-    <div :class="listaAbierta ? 'sheet-open' : 'sheet-closed'" 
-         class="absolute bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] h-[80dvh] flex flex-col sheet-transition border-t border-gray-700">
-        
-        <div class="w-full flex justify-center p-3" @click="toggleLista()">
-            <div class="w-12 h-1.5 bg-gray-600 rounded-full"></div>
-        </div>
-
-        <div class="px-5 pb-3 flex justify-between items-center border-b border-gray-800">
-            <h3 class="text-white font-bold text-lg">Resumen de Pedido</h3>
-            <button @click="enviarWhatsApp" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
-                <span>🚀</span> Enviar WhatsApp
+            <button @click="verResumen()" class="bg-green-600 px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg">
+                🛒 <span x-text="items.length"></span>
             </button>
         </div>
+    </div>
 
-        <div class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
-            <template x-for="(item, index) in items" :key="index">
-                <div class="bg-gray-800 p-3 rounded-xl flex justify-between items-center border border-gray-700">
-                    <span class="text-gray-200 font-medium" x-text="item.nombre"></span>
-                    <div class="flex items-center gap-4">
-                        <span class="text-blue-400 font-bold text-lg" x-text="item.cantidad"></span>
-                        <button @click="eliminar(index)" class="text-gray-500 hover:text-red-400 p-2">✕</button>
-                    </div>
+    <div id="pdf-container" class="w-full h-full flex justify-center bg-black">
+        <div id="page-wrapper" class="relative shadow-2xl">
+            <canvas id="the-canvas" class="block"></canvas>
+            <div id="text-layer" class="textLayer"></div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-20 right-4 z-20 flex flex-col gap-2 pointer-events-auto" x-show="pdfDoc">
+        <button @click="prevPage" class="w-12 h-12 bg-gray-800/90 rounded-full flex items-center justify-center text-white border border-gray-600 shadow-lg active:scale-90">⬆️</button>
+        <button @click="nextPage" class="w-12 h-12 bg-gray-800/90 rounded-full flex items-center justify-center text-white border border-gray-600 shadow-lg active:scale-90">⬇️</button>
+    </div>
+
+    <div class="fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 bg-gray-900 border-t border-gray-700 rounded-t-3xl shadow-[0_-10px_50px_rgba(0,0,0,0.8)]"
+         :class="modalAbierto ? 'translate-y-0' : 'translate-y-full'">
+        
+        <div class="p-5">
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-gray-500 uppercase font-bold tracking-wider">Producto Detectado</label>
+                    <input type="text" x-model="productoActual.nombre" class="w-full bg-transparent text-xl font-bold text-white border-b border-gray-600 focus:border-blue-500 outline-none py-1">
                 </div>
-            </template>
-            <div x-show="items.length === 0" class="text-center text-gray-500 mt-10">
-                Lista vacía.<br>Usa el micrófono o escribe abajo.
+
+                <div class="flex gap-2">
+                    <button @click="productoActual.tipo = 'unidades'" 
+                            :class="productoActual.tipo === 'unidades' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'"
+                            class="flex-1 py-2 rounded-lg font-bold text-sm transition-colors border border-transparent focus:border-blue-400">
+                        📦 Unidad
+                    </button>
+                    <button @click="productoActual.tipo = 'bulto'" 
+                            :class="productoActual.tipo === 'bulto' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400'"
+                            class="flex-1 py-2 rounded-lg font-bold text-sm transition-colors border border-transparent focus:border-purple-400">
+                        🧱 Bulto Cerrado
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <button @click="cambiarCant(-1)" class="w-12 h-12 rounded-full bg-gray-800 text-2xl font-bold text-red-400 active:bg-gray-700">-</button>
+                    <input type="number" x-model="productoActual.cantidad" class="flex-1 text-center bg-gray-800 rounded-xl py-3 text-2xl font-bold text-white outline-none ring-2 ring-transparent focus:ring-blue-500">
+                    <button @click="cambiarCant(1)" class="w-12 h-12 rounded-full bg-gray-800 text-2xl font-bold text-green-400 active:bg-gray-700">+</button>
+                </div>
+
+                <button @click="guardarItem()" class="w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transform transition text-lg">
+                    CONFIRMAR
+                </button>
             </div>
         </div>
     </div>
 
-    <div x-show="notificacion" x-transition.duration.300ms class="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl font-bold text-sm flex items-center gap-2">
-        <span>✅</span> <span x-text="notificacion"></span>
-    </div>
-
     <script>
-        function tacticalApp() {
+        function smartCatalog() {
             return {
-                // CONFIGURACIÓN (Pega tu URL del script aquí)
-                apiUrl: 'https://script.google.com/macros/s/AKfycbySwsXfzeNUHi3VWqGWcJtMmpzLjkSRlBEs7a8_FoaGKqgifoBJRFqAhIV_oTTHAJf40A/exec',
+                pdfDoc: null,
+                pageNum: 1,
+                totalParams: 0,
+                scale: 1.5, // Zoom inicial para que se lea bien en el S9
+                canvas: null,
+                ctx: null,
                 
-                // ESTADO
-                catalogos: [],
-                catalogoUrl: '',
-                items: JSON.parse(localStorage.getItem('stock_s9')) || [],
-                inputRaw: '',
-                listaAbierta: false,
-                notificacion: '',
-                escuchando: false,
-                recognition: null,
+                // Estado del App
+                modalAbierto: false,
+                items: [],
+                productoActual: { nombre: '', cantidad: 1, tipo: 'unidades' },
 
-                async init() {
-                    // Cargar catálogos
-                    try {
-                        const res = await fetch(this.apiUrl);
-                        this.catalogos = await res.json();
-                    } catch(e) { console.error(e); }
-
-                    // Configurar Voz (Web Speech API)
-                    if ('webkitSpeechRecognition' in window) {
-                        this.recognition = new webkitSpeechRecognition();
-                        this.recognition.continuous = false;
-                        this.recognition.lang = 'es-AR'; // Acento Argentino
-                        
-                        this.recognition.onresult = (event) => {
-                            const transcript = event.results[0][0].transcript;
-                            this.inputRaw = transcript;
-                            this.procesarTexto(transcript);
-                            this.escuchando = false;
-                        };
-                        
-                        this.recognition.onerror = () => { this.escuchando = false; };
-                        this.recognition.onend = () => { this.escuchando = false; };
-                    }
+                init() {
+                    this.canvas = document.getElementById('the-canvas');
+                    this.ctx = this.canvas.getContext('2d');
+                    this.items = JSON.parse(localStorage.getItem('smart_stock')) || [];
                 },
 
-                // --- Lógica "Ingeniosa" de Procesamiento de Texto ---
-                // Convierte "Lavandina 5" o "5 trapos de piso" en datos estructurados
-                procesarTexto(texto) {
-                    // Regex para encontrar números
-                    const matchNumero = texto.match(/(\d+)/);
-                    let cantidad = 1;
-                    let nombre = texto;
+                async cargarPDF(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
 
-                    if (matchNumero) {
-                        cantidad = parseInt(matchNumero[0]);
-                        // Quitamos el número del nombre para limpiarlo
-                        nombre = texto.replace(matchNumero[0], '').replace('unidades', '').trim();
-                    }
-
-                    this.agregarItem(nombre, cantidad);
-                },
-
-                agregarManual() {
-                    if(!this.inputRaw) return;
-                    this.procesarTexto(this.inputRaw);
-                },
-
-                agregarItem(nombre, cantidad) {
-                    if (!nombre) return;
+                    const fileReader = new FileReader();
+                    fileReader.onload = async function() {
+                        const typedarray = new Uint8Array(this.result);
+                        // Cargar documento PDF
+                        const loadingTask = pdfjsLib.getDocument(typedarray);
+                        window.app.pdfDoc = await loadingTask.promise;
+                        window.app.totalParams = window.app.pdfDoc.numPages;
+                        window.app.renderPage(1);
+                    };
+                    fileReader.readAsArrayBuffer(file);
                     
-                    // Capitalizar primera letra
-                    nombre = nombre.charAt(0).toUpperCase() + nombre.slice(1);
+                    // Hack para acceder desde callbacks globales
+                    window.app = this; 
+                },
 
-                    this.items.unshift({ nombre, cantidad });
-                    this.guardar();
-                    this.inputRaw = '';
+                async renderPage(num) {
+                    this.pageNum = num;
+                    const page = await this.pdfDoc.getPage(num);
                     
-                    // FEEDBACK SENSORIAL (S9)
-                    // 1. Vibración corta (Haptic)
-                    if (navigator.vibrate) navigator.vibrate(50);
-                    // 2. Notificación Visual
-                    this.mostrarToast(`Agregado: ${cantidad}x ${nombre}`);
+                    // Ajustar escala para móviles
+                    const viewport = page.getViewport({ scale: this.scale });
+                    this.canvas.height = viewport.height;
+                    this.canvas.width = viewport.width;
+
+                    // Renderizar imagen
+                    const renderContext = {
+                        canvasContext: this.ctx,
+                        viewport: viewport
+                    };
+                    await page.render(renderContext).promise;
+
+                    // --- LA MAGIA: PROCESAMIENTO DE TEXTO EN SEGUNDO PLANO ---
+                    this.procesarCapaDeTexto(page, viewport);
                 },
 
-                eliminar(index) {
-                    this.items.splice(index, 1);
-                    this.guardar();
-                    if (navigator.vibrate) navigator.vibrate([30, 50, 30]); // Doble vibración al borrar
-                },
-
-                guardar() {
-                    localStorage.setItem('stock_s9', JSON.stringify(this.items));
-                },
-
-                toggleLista() {
-                    this.listaAbierta = !this.listaAbierta;
-                    if (navigator.vibrate) navigator.vibrate(20);
-                },
-
-                toggleVoz() {
-                    if (!this.recognition) return alert("Tu navegador no soporta voz. Usa Chrome.");
+                async procesarCapaDeTexto(page, viewport) {
+                    const textContent = await page.getTextContent();
+                    const textLayerDiv = document.getElementById("text-layer");
                     
-                    if (this.escuchando) {
-                        this.recognition.stop();
-                    } else {
-                        this.escuchando = true;
-                        this.recognition.start();
-                        if (navigator.vibrate) navigator.vibrate(100); // Vibración larga al iniciar escucha
-                    }
+                    // Limpiar capa anterior
+                    textLayerDiv.innerHTML = "";
+                    textLayerDiv.style.height = viewport.height + 'px';
+                    textLayerDiv.style.width = viewport.width + 'px';
+
+                    // Crear overlay interactivo
+                    // PDF.js nos da el texto y su posición. Nosotros creamos "botones" sobre ellos.
+                    pdfjsLib.renderTextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport: viewport,
+                        textDivs: []
+                    });
+                    
+                    // Añadir listeners de clic a cada palabra/frase generada
+                    // Esperamos un momento a que el DOM se genere
+                    setTimeout(() => {
+                        const spans = textLayerDiv.querySelectorAll('span');
+                        spans.forEach(span => {
+                            // Estilo para indicar interactividad (opcional, aquí invisible)
+                            span.onclick = (e) => {
+                                // "Smart Parser": Limpiar el texto
+                                let texto = e.target.innerText;
+                                // Filtrar: Si es solo un precio o muy corto, ignorar o buscar contexto
+                                if (texto.length < 3) return; 
+
+                                this.abrirModal(texto);
+                            }
+                        });
+                    }, 100);
                 },
 
-                mostrarToast(msj) {
-                    this.notificacion = msj;
-                    setTimeout(() => this.notificacion = '', 2000);
+                abrirModal(nombreDetectado) {
+                    // Limpieza simple de IA: Quitar precios si vienen pegados (ej: "Lavandina $500")
+                    let nombreLimpio = nombreDetectado.replace(/[\$0-9]{3,}/g, '').trim();
+                    
+                    this.productoActual = {
+                        nombre: nombreLimpio,
+                        cantidad: 1,
+                        tipo: 'unidades'
+                    };
+                    
+                    if (navigator.vibrate) navigator.vibrate(30); // Feedback táctil
+                    this.modalAbierto = true;
                 },
 
-                enviarWhatsApp() {
-                    let texto = "📦 *PEDIDO STOCK*\n\n";
-                    this.items.forEach(i => texto += `▪ ${i.cantidad} x ${i.nombre}\n`);
-                    window.location.href = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+                guardarItem() {
+                    const item = {
+                        ...this.productoActual,
+                        id: Date.now()
+                    };
+                    this.items.push(item);
+                    localStorage.setItem('smart_stock', JSON.stringify(this.items));
+                    
+                    this.modalAbierto = false;
+                    if (navigator.vibrate) navigator.vibrate([50, 50]); // Doble vibración confirmación
+                    
+                    // Reset
+                    setTimeout(() => this.productoActual.cantidad = 1, 300);
+                },
+
+                cambiarCant(delta) {
+                    let nueva = this.productoActual.cantidad + delta;
+                    if (nueva < 1) nueva = 1;
+                    this.productoActual.cantidad = nueva;
+                },
+
+                prevPage() {
+                    if (this.pageNum <= 1) return;
+                    this.renderPage(this.pageNum - 1);
+                },
+                nextPage() {
+                    if (this.pageNum >= this.totalParams) return;
+                    this.renderPage(this.pageNum + 1);
+                },
+
+                verResumen() {
+                    let texto = "📋 *PEDIDO GENERADO*\n\n";
+                    this.items.forEach(i => {
+                        let tipoIcon = i.tipo === 'bulto' ? '🧱' : '📦';
+                        texto += `${tipoIcon} ${i.cantidad} x ${i.nombre}\n`;
+                    });
+                    const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+                    window.location.href = url;
                 }
             }
         }
