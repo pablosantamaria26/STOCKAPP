@@ -3,190 +3,306 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stock Rápido</title>
+    <title>Control de Depósito</title>
+    <!-- Tailwind CSS para diseño rápido y táctil -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Iconos -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* Ajuste para que no se mueva el teclado al escribir */
-        body { position: fixed; width: 100%; height: 100%; background: #000; overflow: hidden; }
-        iframe { border: none; width: 100%; height: 100%; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
+        /* Animaciones suaves */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Estilo para inputs numéricos grandes */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
+<body class="bg-slate-100 h-screen flex flex-col overflow-hidden">
 
-<body x-data="stockApp()" x-init="init()" class="flex flex-col text-gray-100">
-
-    <div class="flex-1 relative bg-gray-900 border-b-2 border-blue-600 transition-all duration-300" 
-         :class="modoPantallaCompleta ? 'h-0 flex-none hidden' : 'h-[45%]'">
-        
-        <template x-if="catalogoUrl">
-            <iframe :src="catalogoUrl" allow="autoplay"></iframe>
-        </template>
-        
-        <div x-show="!catalogoUrl" class="absolute inset-0 flex items-center justify-center text-gray-500">
-            <p>Selecciona un proveedor abajo 👇</p>
+    <!-- Header -->
+    <header class="bg-blue-700 text-white p-4 shadow-lg flex justify-between items-center z-10">
+        <div>
+            <h1 class="text-xl font-bold"><i class="fa-solid fa-boxes-stacked mr-2"></i>Depósito</h1>
+            <p class="text-xs text-blue-200" id="current-view-label">Inicio</p>
         </div>
-
-        <button @click="modoPantallaCompleta = !modoPantallaCompleta" 
-                class="absolute bottom-2 right-2 bg-black/70 p-2 rounded-full text-white text-xs z-10 border border-gray-600">
-            ↕️ Ampliar Lista
+        <button onclick="goHome()" class="bg-blue-800 p-2 rounded-full hover:bg-blue-600 transition hidden" id="home-btn">
+            <i class="fa-solid fa-house"></i>
         </button>
-    </div>
+    </header>
 
-    <div class="flex flex-col bg-black transition-all duration-300"
-         :class="modoPantallaCompleta ? 'h-full' : 'h-[55%]'">
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-4 relative" id="main-container">
         
-        <div class="p-2 bg-gray-900 flex gap-2 items-center shadow-lg z-20">
-            <select x-model="catalogoUrl" class="bg-gray-800 text-white text-sm rounded px-2 py-2 flex-1 border border-gray-700 outline-none">
-                <option value="">📂 Ver Catálogo...</option>
-                <template x-for="c in catalogos" :key="c.url">
-                    <option :value="c.url" x-text="c.nombre"></option>
-                </template>
-            </select>
-            
-            <button @click="verResumen()" class="bg-green-600 px-3 py-2 rounded font-bold text-sm whitespace-nowrap">
-                Envíar (<span x-text="items.length"></span>)
+        <!-- VISTA: HOME -->
+        <div id="view-home" class="grid grid-cols-1 gap-6 mt-4 fade-in">
+            <button onclick="loadProviders()" class="bg-white p-8 rounded-2xl shadow-md border-l-8 border-green-500 flex items-center justify-between active:scale-95 transition">
+                <div class="text-left">
+                    <h2 class="text-2xl font-bold text-gray-800">Cargar Stock</h2>
+                    <p class="text-gray-500">Proveedores y cantidades</p>
+                </div>
+                <i class="fa-solid fa-clipboard-check text-4xl text-green-500"></i>
+            </button>
+
+            <button onclick="loadCatalogs()" class="bg-white p-8 rounded-2xl shadow-md border-l-8 border-orange-500 flex items-center justify-between active:scale-95 transition">
+                <div class="text-left">
+                    <h2 class="text-2xl font-bold text-gray-800">Ver Catálogos</h2>
+                    <p class="text-gray-500">PDFs en Drive</p>
+                </div>
+                <i class="fa-solid fa-book-open text-4xl text-orange-500"></i>
             </button>
         </div>
 
-        <div class="px-2 pt-2 pb-1 bg-black">
-            <div class="relative">
-                <input type="text" x-model="busqueda" x-ref="inputBusqueda"
-                       placeholder="🔍 Escribe producto (ej: lavandina)..." 
-                       class="w-full bg-gray-800 text-white rounded-lg pl-3 pr-10 py-3 text-lg font-medium outline-none border border-gray-700 focus:border-blue-500">
-                
-                <button x-show="busqueda" @click="busqueda=''; $refs.inputBusqueda.focus()" class="absolute right-2 top-2 text-gray-400 p-1 text-xl">✕</button>
+        <!-- VISTA: LISTA (Proveedores o Catalogos) -->
+        <div id="view-list" class="hidden fade-in pb-20">
+            <h2 id="list-title" class="text-lg font-bold text-gray-700 mb-3">Seleccionar</h2>
+            <div id="list-container" class="space-y-3">
+                <!-- Se llena con JS -->
+            </div>
+            <!-- Loading Spinner -->
+            <div id="loading" class="hidden flex justify-center py-10">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600"></i>
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-2 space-y-2 pb-20">
+        <!-- VISTA: EDICIÓN STOCK -->
+        <div id="view-editor" class="hidden fade-in pb-24">
+            <div class="flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-sm sticky top-0 z-10">
+                <h2 id="editor-title" class="font-bold text-gray-800 truncate pr-2">Proveedor</h2>
+                <div class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">Editando</div>
+            </div>
             
-            <div x-show="busqueda.length > 0" class="bg-blue-900/30 border border-blue-500/50 p-3 rounded-xl flex justify-between items-center animate-pulse">
-                <div>
-                    <span class="text-gray-400 text-xs uppercase">Agregar Nuevo:</span>
-                    <div class="font-bold text-xl text-white" x-text="busqueda"></div>
-                </div>
-                <button @click="agregar(busqueda)" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg active:scale-95">
-                    + CARGAR
-                </button>
-            </div>
-
-            <template x-for="(item, index) in items" :key="index">
-                <div class="bg-gray-800 p-3 rounded-xl flex justify-between items-center border border-gray-700 shadow-sm">
-                    <div class="flex flex-col flex-1">
-                        <span class="font-medium text-lg text-gray-200" x-text="item.nombre"></span>
-                        <div class="flex gap-2 mt-1">
-                            <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300" x-text="item.tipo"></span>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 bg-black/50 rounded-lg p-1 ml-2">
-                        <button @click="cambiarCant(index, -1)" class="w-8 h-8 rounded bg-gray-700 text-red-400 font-bold text-xl flex items-center justify-center active:bg-gray-600">-</button>
-                        <span class="w-8 text-center font-bold text-xl text-white" x-text="item.cantidad"></span>
-                        <button @click="cambiarCant(index, 1)" class="w-8 h-8 rounded bg-gray-700 text-green-400 font-bold text-xl flex items-center justify-center active:bg-gray-600">+</button>
-                    </div>
-                </div>
-            </template>
-
-            <div x-show="items.length === 0 && !busqueda" class="text-center text-gray-600 mt-8">
-                <p class="text-4xl mb-2">📦</p>
-                <p>Lista vacía.</p>
-                <p class="text-sm">Mira el catálogo arriba y escribe abajo.</p>
+            <div id="items-container" class="space-y-4">
+                <!-- Items para editar stock -->
             </div>
         </div>
+
+    </main>
+
+    <!-- Floating Action Button (Save) -->
+    <div id="fab-save" class="hidden fixed bottom-6 right-6 z-20">
+        <button onclick="saveStockChanges()" class="bg-green-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-2xl hover:bg-green-700 transition transform hover:scale-110">
+            <i class="fa-solid fa-save"></i>
+        </button>
     </div>
 
-    <div x-show="modalOpen" class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-700 p-5 shadow-2xl">
-            <h3 class="text-xl font-bold text-center mb-4 text-white">¿Cómo lo vendes?</h3>
-            <div class="bg-gray-800 p-3 rounded mb-4 text-center text-blue-300 font-medium" x-text="tempNombre"></div>
-            
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <button @click="confirmarAgregar('UNIDAD')" class="bg-blue-600 py-4 rounded-xl font-bold text-white shadow-lg active:scale-95">
-                    📦 UNIDAD
-                </button>
-                <button @click="confirmarAgregar('BULTO')" class="bg-purple-600 py-4 rounded-xl font-bold text-white shadow-lg active:scale-95">
-                    🧱 BULTO
-                </button>
-            </div>
-            <button @click="modalOpen = false" class="w-full py-3 text-gray-400 font-medium">Cancelar</button>
-        </div>
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        Mensaje
     </div>
 
     <script>
-        function stockApp() {
-            return {
-                // PEGA TU URL DEL SCRIPT AQUI (La versión simple del Paso 1)
-                apiUrl: 'https://script.google.com/macros/s/AKfycbySwsXfzeNUHi3VWqGWcJtMmpzLjkSRlBEs7a8_FoaGKqgifoBJRFqAhIV_oTTHAJf40A/exec',
-                
-                catalogos: [],
-                catalogoUrl: '',
-                items: JSON.parse(localStorage.getItem('stock_simple')) || [],
-                busqueda: '',
-                modoPantallaCompleta: false,
-                
-                // Variables del Modal
-                modalOpen: false,
-                tempNombre: '',
+        // ================= CONFIGURACIÓN =================
+        // ¡IMPORTANTE! PEGA AQUÍ LA URL DE TU SCRIPT DE GOOGLE
+        const SCRIPT_URL = "PEGAR_TU_URL_DEL_WORKER_AQUI"; 
+        // =================================================
 
-                async init() {
-                    try {
-                        const res = await fetch(this.apiUrl);
-                        this.catalogos = await res.json();
-                    } catch(e) { console.error(e); }
-                },
+        let currentFileId = null;
+        let originalData = [];
+        let changes = {}; // Almacena cambios { row: newStock }
 
-                agregar(nombre) {
-                    this.tempNombre = nombre;
-                    this.modalOpen = true; // Preguntar si es bulto o unidad
-                },
-
-                confirmarAgregar(tipo) {
-                    // Buscar si ya existe para sumar
-                    let existe = this.items.find(i => i.nombre === this.tempNombre && i.tipo === tipo);
-                    
-                    if (existe) {
-                        existe.cantidad++;
-                    } else {
-                        this.items.unshift({
-                            nombre: this.tempNombre,
-                            cantidad: 1,
-                            tipo: tipo
-                        });
-                    }
-                    
-                    this.guardar();
-                    this.modalOpen = false;
-                    this.busqueda = ''; // Limpiar buscador
-                    
-                    // Vibración de éxito
-                    if(navigator.vibrate) navigator.vibrate(50);
-                },
-
-                cambiarCant(index, delta) {
-                    this.items[index].cantidad += delta;
-                    if (this.items[index].cantidad <= 0) {
-                        if(confirm('¿Borrar este artículo?')) {
-                            this.items.splice(index, 1);
-                        } else {
-                            this.items[index].cantidad = 1;
-                        }
-                    }
-                    this.guardar();
-                },
-
-                guardar() {
-                    localStorage.setItem('stock_simple', JSON.stringify(this.items));
-                },
-
-                verResumen() {
-                    let texto = "*PEDIDO STOCK*\n\n";
-                    this.items.forEach(i => {
-                        let icono = i.tipo === 'BULTO' ? '🧱' : '📦';
-                        texto += `${icono} ${i.cantidad} x ${i.nombre}\n`;
-                    });
-                    window.location.href = `https://wa.me/?text=${encodeURIComponent(texto)}`;
-                }
+        // --- NAVEGACIÓN ---
+        function showView(viewName, label) {
+            document.querySelectorAll('main > div').forEach(div => div.classList.add('hidden'));
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            document.getElementById('current-view-label').innerText = label;
+            
+            const homeBtn = document.getElementById('home-btn');
+            if (viewName === 'home') {
+                homeBtn.classList.add('hidden');
+            } else {
+                homeBtn.classList.remove('hidden');
             }
+
+            // Resetear FAB
+            document.getElementById('fab-save').classList.add('hidden');
+        }
+
+        function goHome() {
+            showView('home', 'Inicio');
+            changes = {};
+        }
+
+        // --- LOGICA DE DATOS ---
+
+        async function loadProviders() {
+            showView('list', 'Proveedores');
+            renderLoading(true);
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getProviders`);
+                const data = await response.json();
+                renderList(data, 'provider');
+            } catch (e) {
+                showToast("Error cargando proveedores: " + e.message);
+            } finally {
+                renderLoading(false);
+            }
+        }
+
+        async function loadCatalogs() {
+            showView('list', 'Catálogos');
+            renderLoading(true);
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getCatalogs`);
+                const data = await response.json();
+                renderList(data, 'catalog');
+            } catch (e) {
+                showToast("Error cargando catálogos");
+            } finally {
+                renderLoading(false);
+            }
+        }
+
+        function renderList(items, type) {
+            const container = document.getElementById('list-container');
+            container.innerHTML = '';
+
+            if (items.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 mt-10">No se encontraron archivos.</p>';
+                return;
+            }
+
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:bg-blue-50 transition";
+                
+                if (type === 'provider') {
+                    el.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="bg-green-100 p-2 rounded-lg text-green-600"><i class="fa-solid fa-boxes-packing"></i></div>
+                            <span class="font-semibold text-gray-700">${item.name}</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-gray-300"></i>
+                    `;
+                    el.onclick = () => openStockEditor(item.id, item.name);
+                } else {
+                    el.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="bg-red-100 p-2 rounded-lg text-red-600"><i class="fa-solid fa-file-pdf"></i></div>
+                            <span class="font-semibold text-gray-700">${item.name}</span>
+                        </div>
+                        <i class="fa-solid fa-external-link-alt text-gray-300"></i>
+                    `;
+                    el.onclick = () => window.open(item.url, '_blank');
+                }
+                container.appendChild(el);
+            });
+        }
+
+        async function openStockEditor(fileId, fileName) {
+            currentFileId = fileId;
+            showView('editor', fileName);
+            document.getElementById('editor-title').innerText = fileName;
+            
+            const container = document.getElementById('items-container');
+            container.innerHTML = '<div class="flex justify-center p-10"><i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i></div>';
+
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getSheetData&fileId=${fileId}`);
+                const data = await response.json();
+                originalData = data.items;
+                renderEditorItems(data.items);
+                document.getElementById('fab-save').classList.remove('hidden');
+            } catch (e) {
+                showToast("Error abriendo hoja");
+                goHome();
+            }
+        }
+
+        function renderEditorItems(items) {
+            const container = document.getElementById('items-container');
+            container.innerHTML = '';
+            changes = {}; // Reset changes
+
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100";
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="font-medium text-gray-800 w-2/3 leading-tight">${item.name}</span>
+                        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Actual: ${item.stock}</span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2">
+                        <button onclick="adjustStock(${item.row}, -1)" class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold active:bg-red-200">-</button>
+                        <input type="number" id="input-${item.row}" value="${item.stock}" 
+                            class="flex-1 text-center text-xl font-bold p-2 border-b-2 border-gray-200 focus:border-blue-500 focus:outline-none bg-transparent"
+                            onchange="registerChange(${item.row}, this.value)">
+                        <button onclick="adjustStock(${item.row}, 1)" class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold active:bg-blue-200">+</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function adjustStock(row, amount) {
+            const input = document.getElementById(`input-${row}`);
+            let val = parseInt(input.value) || 0;
+            val += amount;
+            if (val < 0) val = 0;
+            input.value = val;
+            registerChange(row, val);
+        }
+
+        function registerChange(row, newVal) {
+            changes[row] = parseInt(newVal);
+        }
+
+        async function saveStockChanges() {
+            const keys = Object.keys(changes);
+            if (keys.length === 0) {
+                showToast("No hay cambios para guardar");
+                return;
+            }
+
+            const btn = document.querySelector('#fab-save button');
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            btn.disabled = true;
+
+            const itemsToUpdate = keys.map(row => ({
+                row: parseInt(row),
+                newStock: changes[row]
+            }));
+
+            try {
+                // Usamos text/plain para evitar problemas de CORS en POST simples a GAS
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'updateStock',
+                        fileId: currentFileId,
+                        items: itemsToUpdate
+                    })
+                });
+
+                showToast("¡Stock guardado exitosamente!");
+                goHome();
+            } catch (e) {
+                showToast("Error guardando: " + e.message);
+            } finally {
+                btn.innerHTML = originalIcon;
+                btn.disabled = false;
+            }
+        }
+
+        // --- UTILIDADES ---
+
+        function renderLoading(show) {
+            const el = document.getElementById('loading');
+            if (show) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.remove('opacity-0');
+            setTimeout(() => t.classList.add('opacity-0'), 3000);
+        }
+
+        // Si no hay URL configurada al inicio
+        if (SCRIPT_URL === "PEGAR_TU_URL_DEL_WORKER_AQUI") {
+            alert("⚠️ FALTA CONFIGURACIÓN: Debes pegar la URL del Web App de Google Script en la línea 30 del código HTML.");
         }
     </script>
 </body>
