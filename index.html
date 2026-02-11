@@ -3,306 +3,506 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Control de Depósito</title>
-    <!-- Tailwind CSS para diseño rápido y táctil -->
+    <title>Stock Depósito</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Iconos -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
-        /* Animaciones suaves */
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Estilo para inputs numéricos grandes */
+        /* Ajustes para experiencia nativa (PWA) */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior-y: none; 
+            user-select: none; 
+        }
+        
+        /* Animaciones de entrada */
+        .slide-in { animation: slideIn 0.2s ease-out; }
+        @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        /* Limpiar inputs numéricos */
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        /* Efecto al tocar botones */
+        .btn-active:active { transform: scale(0.95); transition: transform 0.1s; }
+        
+        /* Modal para PDF */
+        .pdf-modal { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            z-index: 50; background: rgba(0,0,0,0.9); 
+            display: none; flex-direction: column; 
+        }
+        .pdf-modal.active { display: flex; animation: fadeIn 0.2s; }
+        
+        /* Toggle Bulto/Unidad */
+        .toggle-btn { transition: all 0.2s; }
+        .toggle-selected { background-color: #2563eb; color: white; shadow: md; transform: scale(1.05); }
+        .toggle-unselected { background-color: #e5e7eb; color: #6b7280; }
     </style>
 </head>
-<body class="bg-slate-100 h-screen flex flex-col overflow-hidden">
+<body class="bg-slate-50 h-screen flex flex-col">
 
-    <!-- Header -->
-    <header class="bg-blue-700 text-white p-4 shadow-lg flex justify-between items-center z-10">
-        <div>
-            <h1 class="text-xl font-bold"><i class="fa-solid fa-boxes-stacked mr-2"></i>Depósito</h1>
-            <p class="text-xs text-blue-200" id="current-view-label">Inicio</p>
+    <!-- HEADER DE NAVEGACIÓN -->
+    <header class="bg-blue-700 text-white shadow-lg flex items-center justify-between px-4 py-3 z-20 h-16 shrink-0 sticky top-0">
+        <div class="flex items-center gap-3 w-full">
+            <!-- Botón Atrás -->
+            <button onclick="goBack()" id="back-btn" class="hidden w-10 h-10 flex items-center justify-center rounded-full hover:bg-blue-600 btn-active text-lg">
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            
+            <!-- Títulos -->
+            <div class="leading-tight flex-1 overflow-hidden">
+                <h1 class="font-bold text-lg tracking-wide truncate" id="header-title">Depósito</h1>
+                <p class="text-xs text-blue-200 opacity-90 truncate" id="header-subtitle">Inicio</p>
+            </div>
+
+            <!-- Botón Ver Catálogo (Solo aparece si hay PDF) -->
+            <button onclick="openCatalogModal()" id="catalog-btn" class="hidden bg-orange-500 hover:bg-orange-600 text-white pl-3 pr-4 py-1.5 rounded-full text-sm font-bold shadow-md btn-active flex items-center gap-2 transition-all border border-orange-400">
+                <i class="fa-solid fa-file-pdf"></i> <span>Ver PDF</span>
+            </button>
         </div>
-        <button onclick="goHome()" class="bg-blue-800 p-2 rounded-full hover:bg-blue-600 transition hidden" id="home-btn">
-            <i class="fa-solid fa-house"></i>
-        </button>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 overflow-y-auto p-4 relative" id="main-container">
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="flex-1 overflow-y-auto relative p-4 pb-28" id="main-content">
         
-        <!-- VISTA: HOME -->
-        <div id="view-home" class="grid grid-cols-1 gap-6 mt-4 fade-in">
-            <button onclick="loadProviders()" class="bg-white p-8 rounded-2xl shadow-md border-l-8 border-green-500 flex items-center justify-between active:scale-95 transition">
-                <div class="text-left">
-                    <h2 class="text-2xl font-bold text-gray-800">Cargar Stock</h2>
-                    <p class="text-gray-500">Proveedores y cantidades</p>
+        <!-- VISTA 1: HOME (Menú Principal) -->
+        <div id="view-home" class="flex flex-col gap-5 mt-2 slide-in">
+            <div onclick="loadProviders()" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-8 border-l-green-500 flex items-center justify-between btn-active cursor-pointer">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">Cargar Stock</h2>
+                    <p class="text-gray-500 text-sm mt-1">Proveedores y cantidades</p>
                 </div>
-                <i class="fa-solid fa-clipboard-check text-4xl text-green-500"></i>
-            </button>
+                <div class="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center text-green-600 text-2xl shadow-sm">
+                    <i class="fa-solid fa-boxes-packing"></i>
+                </div>
+            </div>
 
-            <button onclick="loadCatalogs()" class="bg-white p-8 rounded-2xl shadow-md border-l-8 border-orange-500 flex items-center justify-between active:scale-95 transition">
-                <div class="text-left">
-                    <h2 class="text-2xl font-bold text-gray-800">Ver Catálogos</h2>
-                    <p class="text-gray-500">PDFs en Drive</p>
+            <div onclick="loadCatalogs()" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-8 border-l-orange-500 flex items-center justify-between btn-active cursor-pointer">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">Ver Catálogos</h2>
+                    <p class="text-gray-500 text-sm mt-1">Lista de PDFs</p>
                 </div>
-                <i class="fa-solid fa-book-open text-4xl text-orange-500"></i>
-            </button>
+                <div class="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center text-orange-600 text-2xl shadow-sm">
+                    <i class="fa-solid fa-book-open"></i>
+                </div>
+            </div>
         </div>
 
-        <!-- VISTA: LISTA (Proveedores o Catalogos) -->
-        <div id="view-list" class="hidden fade-in pb-20">
-            <h2 id="list-title" class="text-lg font-bold text-gray-700 mb-3">Seleccionar</h2>
-            <div id="list-container" class="space-y-3">
-                <!-- Se llena con JS -->
-            </div>
+        <!-- VISTA 2: LISTADO (Proveedores o PDFs) -->
+        <div id="view-list" class="hidden slide-in">
+            <div id="list-container" class="space-y-3"></div>
             <!-- Loading Spinner -->
-            <div id="loading" class="hidden flex justify-center py-10">
-                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600"></i>
+            <div id="loader-list" class="hidden flex flex-col items-center justify-center mt-20 text-blue-600">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-3"></i>
+                <span class="text-gray-400 text-sm">Cargando lista...</span>
             </div>
         </div>
 
-        <!-- VISTA: EDICIÓN STOCK -->
-        <div id="view-editor" class="hidden fade-in pb-24">
-            <div class="flex justify-between items-center mb-4 bg-white p-3 rounded-lg shadow-sm sticky top-0 z-10">
-                <h2 id="editor-title" class="font-bold text-gray-800 truncate pr-2">Proveedor</h2>
-                <div class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">Editando</div>
+        <!-- VISTA 3: EDITOR DE STOCK -->
+        <div id="view-editor" class="hidden slide-in">
+            <!-- Barra de búsqueda rápida (opcional, visual por ahora) -->
+            <div class="mb-4 hidden">
+                <input type="text" placeholder="Buscar producto..." class="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:border-blue-500">
             </div>
+
+            <div id="editor-container" class="space-y-3"></div>
             
-            <div id="items-container" class="space-y-4">
-                <!-- Items para editar stock -->
+            <!-- Loading Spinner Editor -->
+            <div id="loader-editor" class="hidden flex flex-col items-center mt-20 text-gray-400">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600 mb-3"></i>
+                <span class="text-sm font-medium">Analizando hoja inteligente...</span>
             </div>
         </div>
 
     </main>
 
-    <!-- Floating Action Button (Save) -->
-    <div id="fab-save" class="hidden fixed bottom-6 right-6 z-20">
-        <button onclick="saveStockChanges()" class="bg-green-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-2xl hover:bg-green-700 transition transform hover:scale-110">
-            <i class="fa-solid fa-save"></i>
-        </button>
+    <!-- FAB: GUARDAR (Flotante) -->
+    <button onclick="saveChanges()" id="fab-save" class="hidden fixed bottom-8 right-6 bg-green-600 hover:bg-green-700 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-2xl btn-active z-30 transition-transform duration-200 transform scale-100">
+        <i class="fa-solid fa-check"></i>
+    </button>
+
+    <!-- MODAL PDF -->
+    <div id="pdf-modal" class="pdf-modal backdrop-blur-sm">
+        <div class="flex justify-between items-center p-4 bg-gray-900 text-white shadow-lg shrink-0">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-file-pdf text-orange-500"></i>
+                <span class="font-bold tracking-wide">Visor de Catálogo</span>
+            </div>
+            <button onclick="closeCatalogModal()" class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="flex-1 bg-white relative w-full h-full">
+            <iframe id="pdf-frame" class="w-full h-full border-0" src=""></iframe>
+            <!-- Loading iframe fallback -->
+            <div class="absolute inset-0 flex items-center justify-center -z-10 text-gray-400">
+                <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+            </div>
+        </div>
     </div>
 
-    <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none z-50">
-        Mensaje
+    <!-- TOAST NOTIFICACIÓN -->
+    <div id="toast" class="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl text-sm font-medium opacity-0 pointer-events-none transition-all duration-300 z-50 whitespace-nowrap flex items-center gap-2">
+        <i class="fa-solid fa-info-circle"></i> <span id="toast-msg">Mensaje</span>
     </div>
 
     <script>
         // ================= CONFIGURACIÓN =================
-        // ¡IMPORTANTE! PEGA AQUÍ LA URL DE TU SCRIPT DE GOOGLE
-        const SCRIPT_URL = "PEGAR_TU_URL_DEL_WORKER_AQUI"; 
+        const WORKER_URL = "https://broken-butterfly-3928.santamariapablodaniel.workers.dev/";
         // =================================================
 
+        // ESTADO DE LA APP
+        let currentView = 'home';
         let currentFileId = null;
-        let originalData = [];
-        let changes = {}; // Almacena cambios { row: newStock }
+        let currentCatalogUrl = null;
+        let changes = {}; // Almacena cambios: { "fila_columna": { row:1, col:2, newStock:"10B" } }
 
-        // --- NAVEGACIÓN ---
-        function showView(viewName, label) {
-            document.querySelectorAll('main > div').forEach(div => div.classList.add('hidden'));
-            document.getElementById(`view-${viewName}`).classList.remove('hidden');
-            document.getElementById('current-view-label').innerText = label;
+        // --- SISTEMA DE NAVEGACIÓN ---
+        
+        function setView(view, title, subtitle) {
+            // Ocultar todas las vistas
+            ['view-home', 'view-list', 'view-editor'].forEach(id => document.getElementById(id).classList.add('hidden'));
             
-            const homeBtn = document.getElementById('home-btn');
-            if (viewName === 'home') {
-                homeBtn.classList.add('hidden');
-            } else {
-                homeBtn.classList.remove('hidden');
+            // Mostrar vista actual con animación
+            const viewEl = document.getElementById(`view-${view}`);
+            viewEl.classList.remove('hidden');
+            // Reiniciar animación
+            viewEl.classList.remove('slide-in');
+            void viewEl.offsetWidth; // Trigger reflow
+            viewEl.classList.add('slide-in');
+
+            // Actualizar textos Header
+            document.getElementById('header-title').innerText = title;
+            document.getElementById('header-subtitle').innerText = subtitle || '';
+            
+            // Control de botones
+            const backBtn = document.getElementById('back-btn');
+            const catBtn = document.getElementById('catalog-btn');
+            const fab = document.getElementById('fab-save');
+
+            if (view === 'home') {
+                backBtn.classList.add('hidden');
+                catBtn.classList.add('hidden');
+                fab.classList.add('hidden');
+                changes = {}; // Limpiar cambios al volver al inicio
+            } else if (view === 'list') {
+                backBtn.classList.remove('hidden');
+                catBtn.classList.add('hidden');
+                fab.classList.add('hidden');
+            } else if (view === 'editor') {
+                backBtn.classList.remove('hidden');
+                // Mostrar botón catálogo solo si existe URL
+                if (currentCatalogUrl) catBtn.classList.remove('hidden'); 
+                else catBtn.classList.add('hidden');
             }
 
-            // Resetear FAB
-            document.getElementById('fab-save').classList.add('hidden');
+            currentView = view;
         }
 
-        function goHome() {
-            showView('home', 'Inicio');
-            changes = {};
+        function goBack() {
+            if (currentView === 'editor') {
+                // Volver a la lista de proveedores
+                setView('list', 'Proveedores', 'Selecciona para editar');
+                document.getElementById('catalog-btn').classList.add('hidden');
+                document.getElementById('fab-save').classList.add('hidden');
+            } else if (currentView === 'list') {
+                // Volver al Home
+                setView('home', 'Depósito', 'Inicio');
+            }
         }
 
-        // --- LOGICA DE DATOS ---
+        // --- CARGA DE DATOS (Backend) ---
 
         async function loadProviders() {
-            showView('list', 'Proveedores');
-            renderLoading(true);
+            setView('list', 'Proveedores', 'Carga de Stock');
+            const loader = document.getElementById('loader-list');
+            const container = document.getElementById('list-container');
+            
+            container.innerHTML = '';
+            loader.classList.remove('hidden');
+            
             try {
-                const response = await fetch(`${SCRIPT_URL}?action=getProviders`);
-                const data = await response.json();
+                const res = await fetch(`${WORKER_URL}?action=getProviders`);
+                const data = await res.json();
+                
+                if(data.error) throw new Error(data.error);
                 renderList(data, 'provider');
-            } catch (e) {
-                showToast("Error cargando proveedores: " + e.message);
-            } finally {
-                renderLoading(false);
+            } catch(e) { 
+                showToast(e.message, true); 
+                container.innerHTML = `<div class="text-center p-10 text-red-500 opacity-70">Error de conexión</div>`;
+            } finally { 
+                loader.classList.add('hidden'); 
             }
         }
 
         async function loadCatalogs() {
-            showView('list', 'Catálogos');
-            renderLoading(true);
+            setView('list', 'Catálogos', 'Consulta PDF');
+            const loader = document.getElementById('loader-list');
+            const container = document.getElementById('list-container');
+            
+            container.innerHTML = '';
+            loader.classList.remove('hidden');
+            
             try {
-                const response = await fetch(`${SCRIPT_URL}?action=getCatalogs`);
-                const data = await response.json();
+                const res = await fetch(`${WORKER_URL}?action=getCatalogs`);
+                const data = await res.json();
+                
+                if(data.error) throw new Error(data.error);
                 renderList(data, 'catalog');
-            } catch (e) {
-                showToast("Error cargando catálogos");
-            } finally {
-                renderLoading(false);
+            } catch(e) { 
+                showToast("Error cargando catálogos", true); 
+            } finally { 
+                loader.classList.add('hidden'); 
             }
         }
 
         function renderList(items, type) {
             const container = document.getElementById('list-container');
-            container.innerHTML = '';
-
-            if (items.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 mt-10">No se encontraron archivos.</p>';
-                return;
-            }
-
-            items.forEach(item => {
-                const el = document.createElement('div');
-                el.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:bg-blue-50 transition";
-                
-                if (type === 'provider') {
-                    el.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <div class="bg-green-100 p-2 rounded-lg text-green-600"><i class="fa-solid fa-boxes-packing"></i></div>
-                            <span class="font-semibold text-gray-700">${item.name}</span>
-                        </div>
-                        <i class="fa-solid fa-chevron-right text-gray-300"></i>
-                    `;
-                    el.onclick = () => openStockEditor(item.id, item.name);
-                } else {
-                    el.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <div class="bg-red-100 p-2 rounded-lg text-red-600"><i class="fa-solid fa-file-pdf"></i></div>
-                            <span class="font-semibold text-gray-700">${item.name}</span>
-                        </div>
-                        <i class="fa-solid fa-external-link-alt text-gray-300"></i>
-                    `;
-                    el.onclick = () => window.open(item.url, '_blank');
-                }
-                container.appendChild(el);
-            });
-        }
-
-        async function openStockEditor(fileId, fileName) {
-            currentFileId = fileId;
-            showView('editor', fileName);
-            document.getElementById('editor-title').innerText = fileName;
             
-            const container = document.getElementById('items-container');
-            container.innerHTML = '<div class="flex justify-center p-10"><i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i></div>';
-
-            try {
-                const response = await fetch(`${SCRIPT_URL}?action=getSheetData&fileId=${fileId}`);
-                const data = await response.json();
-                originalData = data.items;
-                renderEditorItems(data.items);
-                document.getElementById('fab-save').classList.remove('hidden');
-            } catch (e) {
-                showToast("Error abriendo hoja");
-                goHome();
+            if(!items || items.length === 0) { 
+                container.innerHTML = '<div class="text-center text-gray-400 mt-10 italic">La carpeta está vacía</div>'; 
+                return; 
             }
-        }
-
-        function renderEditorItems(items) {
-            const container = document.getElementById('items-container');
-            container.innerHTML = '';
-            changes = {}; // Reset changes
-
-            items.forEach(item => {
+            
+            items.forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100";
+                // Animación escalonada
+                div.style.animation = `slideIn 0.3s ease-out ${index * 0.05}s backwards`;
+                
+                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer btn-active hover:bg-slate-50 transition-colors";
+                
+                const iconClass = type === 'provider' ? 'fa-box text-green-600 bg-green-50' : 'fa-file-pdf text-red-500 bg-red-50';
+                
                 div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="font-medium text-gray-800 w-2/3 leading-tight">${item.name}</span>
-                        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Actual: ${item.stock}</span>
+                    <div class="flex items-center gap-4 overflow-hidden">
+                        <div class="w-12 h-12 rounded-full ${iconClass.split(' ').slice(2).join(' ')} flex items-center justify-center flex-shrink-0">
+                            <i class="fa-solid ${iconClass.split(' ')[0]} ${iconClass.split(' ')[1]} text-lg"></i>
+                        </div>
+                        <span class="font-bold text-gray-700 truncate text-lg">${item.name}</span>
                     </div>
-                    <div class="flex items-center gap-3 mt-2">
-                        <button onclick="adjustStock(${item.row}, -1)" class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold active:bg-red-200">-</button>
-                        <input type="number" id="input-${item.row}" value="${item.stock}" 
-                            class="flex-1 text-center text-xl font-bold p-2 border-b-2 border-gray-200 focus:border-blue-500 focus:outline-none bg-transparent"
-                            onchange="registerChange(${item.row}, this.value)">
-                        <button onclick="adjustStock(${item.row}, 1)" class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold active:bg-blue-200">+</button>
-                    </div>
+                    <i class="fa-solid fa-chevron-right text-gray-300"></i>
                 `;
+                
+                if (type === 'provider') div.onclick = () => loadSheet(item.id, item.name);
+                else div.onclick = () => window.open(item.url, '_blank');
+                
                 container.appendChild(div);
             });
         }
 
-        function adjustStock(row, amount) {
-            const input = document.getElementById(`input-${row}`);
-            let val = parseInt(input.value) || 0;
-            val += amount;
-            if (val < 0) val = 0;
-            input.value = val;
-            registerChange(row, val);
+        // --- EDITOR INTELIGENTE ---
+
+        async function loadSheet(id, name) {
+            currentFileId = id;
+            currentCatalogUrl = null;
+            setView('editor', name, 'Analizando hoja...');
+            
+            const container = document.getElementById('editor-container');
+            const loader = document.getElementById('loader-editor');
+            
+            container.innerHTML = '';
+            loader.classList.remove('hidden');
+            
+            try {
+                const res = await fetch(`${WORKER_URL}?action=getSheetData&fileId=${id}`);
+                const data = await res.json();
+                
+                if(data.error) throw new Error(data.error);
+                
+                // Actualizar subtítulo
+                document.getElementById('header-subtitle').innerText = 'Editando Stock';
+
+                // Guardar URL del catálogo si el backend lo encontró
+                if (data.catalogUrl) {
+                    currentCatalogUrl = data.catalogUrl;
+                    document.getElementById('catalog-btn').classList.remove('hidden');
+                } else {
+                    document.getElementById('catalog-btn').classList.add('hidden');
+                }
+
+                renderEditor(data.items);
+                document.getElementById('fab-save').classList.remove('hidden');
+
+            } catch(e) {
+                container.innerHTML = `<div class="text-center p-6 bg-red-50 rounded-xl mx-4 mt-4 text-red-600 border border-red-100"><i class="fa-solid fa-triangle-exclamation mb-2 text-2xl"></i><br>${e.message}</div>`;
+            } finally {
+                loader.classList.add('hidden');
+            }
         }
 
-        function registerChange(row, newVal) {
-            changes[row] = parseInt(newVal);
-        }
-
-        async function saveStockChanges() {
-            const keys = Object.keys(changes);
-            if (keys.length === 0) {
-                showToast("No hay cambios para guardar");
-                return;
+        function renderEditor(items) {
+            const container = document.getElementById('editor-container');
+            changes = {};
+            
+            if(!items || items.length === 0) { 
+                container.innerHTML = '<div class="text-center text-gray-400 mt-10">No se detectaron productos.<br><small>Verifica los títulos de las columnas (Articulo/Stock)</small></div>'; 
+                return; 
             }
 
-            const btn = document.querySelector('#fab-save button');
-            const originalIcon = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-            btn.disabled = true;
+            items.forEach(item => {
+                // Clave única para tracking
+                const key = `${item.row}_${item.col}`;
+                
+                // Lógica para detectar si es Unidad o Bulto basado en lo que ya está escrito
+                let rawVal = item.stock ? item.stock.toString() : "0";
+                let numVal = parseInt(rawVal.replace(/[^0-9]/g, '')) || 0; // Solo números
+                
+                // Si contiene 'b' (case insensitive), activamos modo bulto
+                let initialType = rawVal.toLowerCase().includes('b') ? 'b' : 'u';
 
-            const itemsToUpdate = keys.map(row => ({
-                row: parseInt(row),
-                newStock: changes[row]
-            }));
+                const div = document.createElement('div');
+                div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3";
+                
+                div.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <span class="font-bold text-gray-800 leading-tight text-lg w-3/4">${item.name}</span>
+                        <span class="text-xs bg-slate-100 text-slate-500 font-mono px-2 py-1 rounded border border-slate-200">
+                            Actual: <strong>${item.stock}</strong>
+                        </span>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <!-- Selectores B/U -->
+                        <div class="flex bg-slate-100 p-1 rounded-lg shrink-0">
+                            <button onclick="toggleType('${key}', 'u', this)" class="toggle-btn w-10 h-10 rounded-md font-bold text-sm flex items-center justify-center ${initialType === 'u' ? 'toggle-selected' : 'toggle-unselected'}">U</button>
+                            <button onclick="toggleType('${key}', 'b', this)" class="toggle-btn w-10 h-10 rounded-md font-bold text-sm flex items-center justify-center ${initialType === 'b' ? 'toggle-selected' : 'toggle-unselected'}">B</button>
+                        </div>
+
+                        <!-- Input Cantidad -->
+                        <div class="flex-1 flex items-center bg-white border-2 border-slate-100 rounded-xl px-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                             <input type="number" id="input_${key}" value="${numVal === 0 && rawVal !== '0' ? '' : numVal}" 
+                                placeholder="0"
+                                class="w-full bg-transparent text-2xl font-bold text-center py-2 text-gray-800 focus:outline-none"
+                                onkeyup="trackChange('${key}', ${item.row}, ${item.col})"
+                                onchange="trackChange('${key}', ${item.row}, ${item.col})"
+                                data-type="${initialType}"> <!-- Guardamos el tipo actual aqui -->
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            
+            // Espacio extra para scroll
+            const spacer = document.createElement('div');
+            spacer.className = "h-24";
+            container.appendChild(spacer);
+        }
+
+        // --- LÓGICA DE EDICIÓN ---
+
+        function toggleType(key, type, btn) {
+            // UI Update
+            const parent = btn.parentElement;
+            const buttons = parent.querySelectorAll('button');
+            buttons.forEach(b => {
+                b.className = `toggle-btn w-10 h-10 rounded-md font-bold text-sm flex items-center justify-center toggle-unselected`;
+            });
+            btn.className = `toggle-btn w-10 h-10 rounded-md font-bold text-sm flex items-center justify-center toggle-selected`;
+            
+            // Actualizar estado en el input
+            const input = document.getElementById(`input_${key}`);
+            input.dataset.type = type;
+            
+            // Disparar lógica de guardado
+            trackChange(key, null, null); // Pasamos null porque ya tenemos row/col en closure si fuera necesario, pero mejor sacarlo de changes o pasar params. 
+            // Corrección: necesitamos row y col. Vamos a extraerlos del ID input_${key} que es input_ROW_COL.
+            const parts = key.split('_');
+            trackChange(key, parseInt(parts[0]), parseInt(parts[1]));
+        }
+
+        function trackChange(key, row, col) {
+            const input = document.getElementById(`input_${key}`);
+            let val = input.value;
+            let type = input.dataset.type; // 'u' o 'b'
+
+            // Lógica de valor final
+            let finalValue = "";
+            
+            if (val === "" || val === "0") {
+                finalValue = "x"; // Formato estándar para 0
+            } else {
+                finalValue = val;
+                if (type === 'b') {
+                    finalValue += "B"; // Agregamos B si es bulto
+                }
+                // Si es 'u', dejamos solo el número (limpio)
+            }
+
+            // Guardar cambio
+            changes[key] = {
+                row: row,
+                col: col,
+                newStock: finalValue
+            };
+        }
+
+        async function saveChanges() {
+            const payload = Object.values(changes);
+            
+            if (payload.length === 0) { 
+                showToast("No hay cambios para guardar"); 
+                return; 
+            }
+            
+            const fab = document.getElementById('fab-save');
+            const originalIcon = fab.innerHTML;
+            fab.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            fab.disabled = true;
 
             try {
-                // Usamos text/plain para evitar problemas de CORS en POST simples a GAS
-                await fetch(SCRIPT_URL, {
+                const res = await fetch(WORKER_URL, {
                     method: 'POST',
-                    body: JSON.stringify({
-                        action: 'updateStock',
-                        fileId: currentFileId,
-                        items: itemsToUpdate
+                    body: JSON.stringify({ 
+                        action: 'updateStock', 
+                        fileId: currentFileId, 
+                        items: payload 
                     })
                 });
-
-                showToast("¡Stock guardado exitosamente!");
-                goHome();
-            } catch (e) {
-                showToast("Error guardando: " + e.message);
+                
+                const data = await res.json();
+                if(data.error) throw new Error(data.error);
+                
+                showToast("¡Stock Guardado Correctamente!", false);
+                goBack(); // Volver a lista
+                
+            } catch(e) {
+                showToast("Error: " + e.message, true);
             } finally {
-                btn.innerHTML = originalIcon;
-                btn.disabled = false;
+                fab.innerHTML = originalIcon;
+                fab.disabled = false;
             }
+        }
+
+        // --- CATALOGO PDF (MODAL) ---
+        function openCatalogModal() {
+            if(!currentCatalogUrl) return;
+            const modal = document.getElementById('pdf-modal');
+            const iframe = document.getElementById('pdf-frame');
+            
+            iframe.src = currentCatalogUrl;
+            modal.classList.add('active');
+        }
+        
+        function closeCatalogModal() {
+            const modal = document.getElementById('pdf-modal');
+            const iframe = document.getElementById('pdf-frame');
+            
+            modal.classList.remove('active');
+            iframe.src = ""; // Limpiar para detener carga
         }
 
         // --- UTILIDADES ---
-
-        function renderLoading(show) {
-            const el = document.getElementById('loading');
-            if (show) el.classList.remove('hidden');
-            else el.classList.add('hidden');
-        }
-
-        function showToast(msg) {
+        function showToast(msg, isError) {
             const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.remove('opacity-0');
-            setTimeout(() => t.classList.add('opacity-0'), 3000);
-        }
-
-        // Si no hay URL configurada al inicio
-        if (SCRIPT_URL === "PEGAR_TU_URL_DEL_WORKER_AQUI") {
-            alert("⚠️ FALTA CONFIGURACIÓN: Debes pegar la URL del Web App de Google Script en la línea 30 del código HTML.");
+            document.getElementById('toast-msg').innerText = msg;
+            
+            t.className = `fixed top-24 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl text-sm font-medium transition-all duration-300 z-50 whitespace-nowrap flex items-center gap-2 ${isError ? 'bg-red-600 text-white' : 'bg-gray-800 text-white'}`;
+            t.style.opacity = '1';
+            
+            setTimeout(() => t.style.opacity = '0', 3000);
         }
     </script>
 </body>
