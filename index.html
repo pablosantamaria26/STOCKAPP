@@ -58,8 +58,8 @@
                 <p class="text-xs text-blue-200 opacity-90 truncate" id="header-subtitle">Inicio</p>
             </div>
 
-            <!-- Botón Ver Catálogo (Solo aparece si hay PDF) -->
-            <button onclick="openCatalogModal()" id="catalog-btn" class="hidden bg-orange-500 hover:bg-orange-600 text-white pl-3 pr-4 py-1.5 rounded-full text-sm font-bold shadow-md btn-active flex items-center gap-2 transition-all border border-orange-400">
+            <!-- Botón Ver Catálogo (Solo aparece si hay PDF asociado en edición) -->
+            <button onclick="openCurrentCatalog()" id="catalog-btn" class="hidden bg-orange-500 hover:bg-orange-600 text-white pl-3 pr-4 py-1.5 rounded-full text-sm font-bold shadow-md btn-active flex items-center gap-2 transition-all border border-orange-400">
                 <i class="fa-solid fa-file-pdf"></i> <span>Ver PDF</span>
             </button>
         </div>
@@ -286,8 +286,13 @@
                     <i class="fa-solid fa-chevron-right text-gray-300"></i>
                 `;
                 
-                if (type === 'provider') div.onclick = () => loadSheet(item.id, item.name);
-                else div.onclick = () => window.open(item.url, '_blank');
+                // AQUÍ ESTÁ EL CAMBIO CLAVE:
+                if (type === 'provider') {
+                    div.onclick = () => loadSheet(item.id, item.name);
+                } else {
+                    // Para catálogos, abrimos el visor interno
+                    div.onclick = () => openCatalogViewer(item.url);
+                }
                 
                 container.appendChild(div);
             });
@@ -338,7 +343,7 @@
             changes = {};
             
             if(!items || items.length === 0) { 
-                container.innerHTML = '<div class="text-center text-gray-400 mt-10">No se detectaron productos.<br><small>Verifica los títulos de las columnas (Articulo/Stock)</small></div>'; 
+                container.innerHTML = '<div class="text-center text-gray-400 mt-10">No se detectaron productos.<br><small>Es posible que esta hoja tenga un formato que la IA no reconoce aún.</small></div>'; 
                 return; 
             }
 
@@ -407,8 +412,6 @@
             input.dataset.type = type;
             
             // Disparar lógica de guardado
-            trackChange(key, null, null); // Pasamos null porque ya tenemos row/col en closure si fuera necesario, pero mejor sacarlo de changes o pasar params. 
-            // Corrección: necesitamos row y col. Vamos a extraerlos del ID input_${key} que es input_ROW_COL.
             const parts = key.split('_');
             trackChange(key, parseInt(parts[0]), parseInt(parts[1]));
         }
@@ -428,7 +431,6 @@
                 if (type === 'b') {
                     finalValue += "B"; // Agregamos B si es bulto
                 }
-                // Si es 'u', dejamos solo el número (limpio)
             }
 
             // Guardar cambio
@@ -477,12 +479,25 @@
         }
 
         // --- CATALOGO PDF (MODAL) ---
-        function openCatalogModal() {
-            if(!currentCatalogUrl) return;
+        
+        // Abre catálogo desde el botón en modo edición
+        function openCurrentCatalog() {
+            if(currentCatalogUrl) openCatalogViewer(currentCatalogUrl);
+        }
+
+        // Nueva función para abrir cualquier URL en el modal
+        function openCatalogViewer(url) {
             const modal = document.getElementById('pdf-modal');
             const iframe = document.getElementById('pdf-frame');
             
-            iframe.src = currentCatalogUrl;
+            // TRUCO: Convertir enlace de Google Drive /view o /edit a /preview para que sea embebible
+            let embedUrl = url;
+            if (url.includes('drive.google.com')) {
+                // Reemplazamos /view?.... con /preview
+                embedUrl = url.replace(/\/view.*/, '/preview').replace(/\/edit.*/, '/preview');
+            }
+            
+            iframe.src = embedUrl;
             modal.classList.add('active');
         }
         
